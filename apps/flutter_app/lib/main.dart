@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/session_screen.dart';
-import 'screens/stubs.dart';
+import 'screens/capture_screen.dart';
+import 'screens/review_screen.dart';
+import 'screens/browser_screen.dart';
+import 'screens/validation_screen.dart';
+import 'screens/transfer_screen.dart';
+import 'screens/settings_screen.dart';
 import 'workflow.dart';
 
 void main() {
@@ -31,6 +36,7 @@ class _CorePhotoAppState extends State<CorePhotoApp> {
       DashboardScreen(api: _api, onOpen: (index) => setState(() => _index = index)),
       SessionScreen(api: _api, workflow: _workflow),
       const CaptureScreen(),
+      const ReviewScreen(),
       const BrowserScreen(),
       const ValidationScreen(),
       const TransferScreen(),
@@ -48,6 +54,7 @@ class _CorePhotoAppState extends State<CorePhotoApp> {
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(icon: Icon(Icons.event_note), label: 'Session'),
             BottomNavigationBarItem(icon: Icon(Icons.camera_alt), label: 'Capture'),
+            BottomNavigationBarItem(icon: Icon(Icons.image), label: 'Review'),
             BottomNavigationBarItem(icon: Icon(Icons.photo_library), label: 'Browser'),
             BottomNavigationBarItem(icon: Icon(Icons.verified), label: 'Valid'),
             BottomNavigationBarItem(icon: Icon(Icons.cloud_upload), label: 'Transfer'),
