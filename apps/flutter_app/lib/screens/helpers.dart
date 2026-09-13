@@ -5,7 +5,7 @@ class GridOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1),
         ),
         child: Stack(
           alignment: Alignment.center,
