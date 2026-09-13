@@ -84,3 +84,15 @@ token.txt
 
 # SDD scratch (ledger, briefs, review packages)
 .superpowers/
+
+# AI assistants / agent tools scratch - jangan commit, hide dari GitHub
+.opencode/
+.codex/
+.cursor/
+.aider*
+.cline/
+.roo/
+.windsurf/
+*.code-workspace
+.ai/
+claude_mem/
