@@ -81,3 +81,6 @@ token.txt
 *.swo
 *~
 .DS_Store
+
+# SDD scratch (ledger, briefs, review packages)
+.superpowers/
