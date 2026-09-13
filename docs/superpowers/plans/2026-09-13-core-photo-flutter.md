@@ -8,6 +8,8 @@
 
 **Tech Stack:** Flutter 3.44.8, Dart 3.12.2, package:http, flutter_test, Python side (FastAPI existing)
 
+> NOTE (env, binding for Tasks 2-8): all `flutter ...` commands run with cwd `apps/flutter_app` (e.g. `flutter test test/api_client_test.dart`, `flutter analyze`). `flutter test <path>` from repo root does not resolve a pubspec.
+
 ## Global Constraints
 
 - Windows 10/11 64-bit desktop only; single Setup.exe later (installer = later plan, not here).
