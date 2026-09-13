@@ -27,7 +27,7 @@ void main() {
   });
 
   test('stop without process is no-op; failed starter leaves not-running', () async {
-    final launcher = SidecarLauncher(starter: (_, __) => throw const SocketException('no exe'));
+    final launcher = SidecarLauncher(starter: (_, _) => throw const SocketException('no exe'));
     launcher.stop();
     expect(launcher.running, isFalse);
     await expectLater(() => launcher.launch('missing.exe', Uri.parse('http://127.0.0.1:9/healthz')), throwsA(isA<SocketException>()));

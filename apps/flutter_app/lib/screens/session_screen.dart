@@ -56,6 +56,15 @@ class _SessionScreenState extends State<SessionScreen> {
     }
   }
 
+  Future<void> _activate(String id) async {
+    try {
+      await SessionService(widget.api).activate(id);
+      await _refresh();
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -68,7 +77,12 @@ class _SessionScreenState extends State<SessionScreen> {
           TextField(key: const Key('site'), controller: _site, decoration: const InputDecoration(labelText: 'Site')),
           if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red)),
           ElevatedButton(onPressed: _create, child: const Text('Create')),
-          for (final session in _sessions) ListTile(title: Text('${session.operator} @ ${session.site}'), subtitle: Text('${session.date} · ${session.id}')),
+          for (final session in _sessions)
+            ListTile(
+              title: Text('${session.operator} @ ${session.site}'),
+              subtitle: Text('${session.date} · ${session.id}'),
+              trailing: TextButton(onPressed: () => _activate(session.id), child: const Text('Activate')),
+            ),
         ],
       ),
     );
