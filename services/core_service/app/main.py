@@ -1,12 +1,15 @@
 # services/core_service/app/main.py
 """Localhost API skeleton. Bind 127.0.0.1 only at runtime; no network exposure."""
+import os
 from dataclasses import asdict
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from app.camera.adapters import CameraError
 from app.camera.fake import FakeAdapter
 from app.camera.manager import CameraManager
-from app.jobs import get_job
+from app.filenames import validate_filename
+from app.jobs import create_job, finish_job, fail_job, get_job
+from app.storage import md5_file
 from app.validation import validate_interval
 
 VERSION = "0.1.0"
@@ -105,6 +108,28 @@ def create_app() -> FastAPI:
         if camera_manager.active is None or not camera_manager.active.liveview_running():
             return JSONResponse(status_code=409, content={"error": "live view not running: call start first"})
         return StreamingResponse(_mjpeg(camera_manager), media_type="multipart/x-mixed-replace; boundary=frame")
+
+    @app.post("/captures")
+    def captures(payload: dict) -> dict:
+        job = create_job("capture")
+        check = validate_filename(str(payload.get("filename", "")))
+        if not check["valid"]:
+            fail_job(job["id"], check.get("warning", "invalid filename"))
+            return {"job_id": job["id"]}
+        try:
+            adapter = camera_manager.require_ready()
+        except CameraError as e:
+            fail_job(job["id"], str(e))
+            return {"job_id": job["id"]}
+        try:
+            out_dir = str(payload.get("out_dir", ""))
+            os.makedirs(out_dir, exist_ok=True)
+            raw_path = os.path.join(out_dir, str(payload["filename"]))
+            adapter.capture(raw_path)
+            finish_job(job["id"], {"raw_path": raw_path, "md5": md5_file(raw_path), "filename": str(payload["filename"])})
+        except (CameraError, OSError) as e:
+            fail_job(job["id"], str(e))
+        return {"job_id": job["id"]}
 
     return app
 
