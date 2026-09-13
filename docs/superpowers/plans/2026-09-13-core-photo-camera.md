@@ -525,12 +525,15 @@ def test_frame_and_mjpeg_need_running_liveview():
     assert c.post("/camera/liveview/start").json() == {"ok": True}
     frame = c.get("/camera/frame")
     assert frame.status_code == 200 and frame.content[:2] == b"\xff\xd8"
-    with c.stream("GET", "/camera/liveview.mjpg") as r:
-        assert r.status_code == 200
-        assert r.headers["content-type"].startswith("multipart/x-mixed-replace")
-        chunk = next(r.iter_bytes())
-        assert b"\xff\xd8" in chunk
+    from app.main import _mjpeg, camera_manager
+    gen = _mjpeg(camera_manager)
+    first = next(gen)
+    assert first.startswith(b"--frame\r\nContent-Type: image/jpeg\r\n\r\n") and b"\xff\xd8" in first
+    second = next(gen)
+    assert b"\xff\xd8" in second
     assert c.post("/camera/liveview/stop").json() == {"ok": True}
+    assert list(gen) == []
+    assert c.get("/camera/liveview.mjpg").status_code == 409
 
 
 def test_disconnect_returns_not_connected():
