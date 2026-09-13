@@ -1,0 +1,83 @@
+# Flutter + Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.packages
+.pub-cache/
+.pub/
+flutter_*.png
+unlinked_spec.ds
+
+# Keep pubspec.lock for app (do NOT ignore)
+# pubspec.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# PyInstaller (scoped agar tidak clash dengan Flutter build/)
+services/core_service/dist/
+services/core_service/build/
+services/core_service/*.spec
+*.manifest
+
+# Windows build outputs
+installer/Output/
+*.exe
+*.msi
+*.msix
+*.appx
+*.msm
+*.msp
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Local runtime data (DB, logs, token, foto lokal) - jangan commit
+*.db
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.log
+data/
+.local_data/
+docs/superpowers/plans/*.tmp
+
+# Foto / RAW lokal (hasil capture, bukan source)
+*.CR2
+*.CR3
+*.NEF
+*.ARW
+Documents/CorePhoto/
+
+# Env & secrets
+.env
+.env.*
+*.token
+token.txt
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
