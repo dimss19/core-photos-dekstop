@@ -14,17 +14,8 @@ VERSION = "0.1.0"
 camera_manager = CameraManager([FakeAdapter()])
 
 
-# ponytail: bounded burst, not infinite — starlette>=1 TestClient buffers the full
-# body before returning, so an unbounded generator hangs test_camera.py forever
-# (repro: c.stream() never yields headers). Lift cap when a real streaming
-# consumer exists + test against a live server instead.
-_MJPEG_MAX_FRAMES = 1
-
-
 def _mjpeg(manager: CameraManager):
-    for _ in range(_MJPEG_MAX_FRAMES):
-        if manager.active is None or not manager.active.liveview_running():
-            break
+    while manager.active is not None and manager.active.liveview_running():
         frame = manager.active.grab_frame()
         yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
 
