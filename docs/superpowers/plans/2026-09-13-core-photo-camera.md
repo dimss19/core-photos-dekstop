@@ -438,7 +438,7 @@ class CameraManager:
     def status(self) -> dict:
         if self._active is not None and self._active.is_connected():
             return {"status": STATUS_READY, "adapter": self._active.name, "detail": self._detail}
-        if self._detail and "not detected" not in self._detail and "yet" not in self._detail:
+        if self._detail and "not detected" not in self._detail and "yet" not in self._detail and "disconnected" not in self._detail:
             return {"status": STATUS_ERROR, "adapter": None, "detail": self._detail}
         return {"status": STATUS_DOWN, "adapter": None, "detail": self._detail}
 
