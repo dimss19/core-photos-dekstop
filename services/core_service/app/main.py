@@ -1,6 +1,7 @@
 # services/core_service/app/main.py
 """Localhost API skeleton. Bind 127.0.0.1 only at runtime; no network exposure."""
 import os
+import time
 from dataclasses import asdict
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -15,6 +16,9 @@ from app.validation import validate_interval
 VERSION = "0.1.0"
 
 camera_manager = CameraManager([FakeAdapter()])
+
+_sessions: dict = {}
+_active_session_id: str | None = None
 
 
 def _mjpeg(manager: CameraManager):
@@ -130,6 +134,31 @@ def create_app() -> FastAPI:
         except (CameraError, OSError) as e:
             fail_job(job["id"], str(e))
         return {"job_id": job["id"]}
+
+    @app.post("/sessions", status_code=201)
+    def create_session(payload: dict) -> dict:
+        global _active_session_id
+        sid = f"s{len(_sessions) + 1}"
+        session = {"id": sid, "date": str(payload.get("date", "")), "operator": str(payload.get("operator", "")), "site": str(payload.get("site", "")), "created_at": time.time()}
+        _sessions[sid] = session
+        _active_session_id = sid
+        return {"session": session}
+
+    @app.get("/sessions")
+    def list_sessions() -> dict:
+        return {"sessions": list(_sessions.values())}
+
+    @app.post("/sessions/{sid}/activate")
+    def activate_session(sid: str):
+        global _active_session_id
+        if sid not in _sessions:
+            return JSONResponse(status_code=404, content={"error": f"unknown session {sid}"})
+        _active_session_id = sid
+        return {"active": _sessions[sid]}
+
+    @app.get("/sessions/active")
+    def active_session() -> dict:
+        return {"active": _sessions.get(_active_session_id)}
 
     return app
 
