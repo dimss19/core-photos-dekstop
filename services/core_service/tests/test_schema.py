@@ -13,5 +13,7 @@ def test_init_schema_creates_tables():
         cur = db.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = [row[0] for row in cur.fetchall()]
-        db.close()
         assert set(tables) == {'photos', 'schema_info', 'sessions', 'transfers', 'trays'}
+        cur.execute('SELECT version FROM schema_info')
+        assert cur.fetchone()[0] == 1
+        db.close()

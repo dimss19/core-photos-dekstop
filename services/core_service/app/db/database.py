@@ -11,7 +11,9 @@ class Database:
     def connect(self) -> None:
         if self._conn is not None:
             return
-        self._conn = sqlite3.connect(self._path, isolation_level=None)
+        # check_same_thread=False: TestClient/uvicorn serve requests from worker
+        # threads in this single-process localhost service.
+        self._conn = sqlite3.connect(self._path, isolation_level=None, check_same_thread=False)
         self._conn.execute('PRAGMA journal_mode=WAL')
         self._conn.row_factory = sqlite3.Row
 
