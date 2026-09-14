@@ -25,6 +25,9 @@ class ApiClient {
   Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) async =>
       _decode(await _http.post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body)));
 
+  Future<Map<String, dynamic>> patchJson(String path, Map<String, dynamic> body) async =>
+      _decode(await _http.patch(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body)));
+
   Map<String, dynamic> _decode(http.Response r) {
     if (r.statusCode < 200 || r.statusCode >= 300) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;
@@ -43,6 +46,8 @@ class ApiClient {
   Future<Map<String, dynamic>> activateSession(String id) => postJson('/sessions/$id/activate', {});
   Future<Map<String, dynamic>> activeSession() => getJson('/sessions/active');
   Future<Map<String, dynamic>> createTray(Map<String, dynamic> tray) => postJson('/trays', tray);
+  Future<Map<String, dynamic>> getTray(String id) => getJson('/trays/$id');
+  Future<Map<String, dynamic>> correctTray(String id, Map<String, dynamic> fields) => patchJson('/trays/$id', fields);
   Future<Map<String, dynamic>> validateTray(String trayId) => postJson('/trays/validate', {'tray_id': trayId});
   Future<Map<String, dynamic>> processCapture({required String rawPath, required String trayId, List<int> box = const [0, 0]}) =>
       postJson('/process', {'raw_path': rawPath, 'tray_id': trayId, 'box': box});

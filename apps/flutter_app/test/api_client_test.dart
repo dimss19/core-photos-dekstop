@@ -58,6 +58,11 @@ void main() {
       await utf8.decoder.bind(req).join();
       Object out = const {};
       if (req.uri.path == '/trays') out = {'tray': {'id': 't1'}};
+      if (req.uri.path == '/trays/t1') {
+        out = req.method == 'PATCH'
+            ? {'tray': {'id': 't1', 'validation': null}}
+            : {'tray': {'id': 't1', 'hole_id': 'Core01'}};
+      }
       if (req.uri.path == '/trays/validate') out = {'valid': true, 'status': 'VALID', 'errors': {}};
       if (req.uri.path == '/process') out = {'job_id': 'job-1'};
       if (req.uri.path == '/photos') out = {'photos': []};
@@ -73,6 +78,8 @@ void main() {
     });
     final api = ApiClient(baseUrl: 'http://127.0.0.1:${server.port}');
     expect((await api.createTray({'hole_id': 'Core01'}))['tray']['id'], 't1');
+    expect((await api.getTray('t1'))['tray']['hole_id'], 'Core01');
+    expect((await api.correctTray('t1', {'comments': 'x'}))['tray']['validation'], isNull);
     expect((await api.validateTray('t1'))['status'], 'VALID');
     expect((await api.processCapture(rawPath: '/r.jpg', trayId: 't1'))['job_id'], 'job-1');
     expect((await api.retakeCapture('job-1', {}))['job_id'], 'job-4');
