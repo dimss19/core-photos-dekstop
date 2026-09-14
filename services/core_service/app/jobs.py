@@ -23,3 +23,8 @@ def finish_job(job_id: str, result: dict) -> None:
 
 def fail_job(job_id: str, error: str) -> None:
     _jobs[job_id].update(status="error", error=error)
+
+
+def set_job_progress(job_id: str, pct: int) -> None:
+    if job_id in _jobs:
+        _jobs[job_id]["progress"] = int(pct)

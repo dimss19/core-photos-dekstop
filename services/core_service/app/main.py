@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import time
+from threading import Thread
 from dataclasses import asdict
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -16,7 +17,7 @@ from app.db.schema import init_schema
 from app.db import queries as q
 from app.filenames import validate_filename
 from app.imaging import crop_tray, resolve_box
-from app.jobs import create_job, finish_job, fail_job, get_job
+from app.jobs import create_job, finish_job, fail_job, get_job, set_job_progress
 from app.storage import atomic_write_json, build_sidecar, md5_file, resolve_tray_dir
 from app.validation import validate_interval, validate_tray
 
@@ -380,7 +381,7 @@ def create_app() -> FastAPI:
             q.update_transfer(_db, xid, "error", 0, detail)
             fail_job(job["id"], detail)
             return {"job_id": job["id"]}
-        _run_transfer(job["id"], sids, dest, xid)
+        Thread(target=_run_transfer_thread, args=(job["id"], sids, dest, xid), daemon=True).start()
         return {"job_id": job["id"]}
 
     @app.post("/transfer/{jid}/retry")
@@ -390,7 +391,7 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=404, content={"error": f"unknown transfer job {jid}"})
         job = create_job("transfer")
         _transfer_ctx[job["id"]] = ctx
-        _run_transfer(job["id"], ctx["session_ids"], ctx["destination"], ctx["xid"])
+        Thread(target=_run_transfer_thread, args=(job["id"], ctx["session_ids"], ctx["destination"], ctx["xid"]), daemon=True).start()
         return {"job_id": job["id"]}
 
     @app.post("/sessions", status_code=201)
@@ -465,7 +466,9 @@ def _run_transfer(job_id: str, session_ids: list, dest: dict, xid: str) -> None:
             copied.append(rel)
         except OSError as e:
             failed.append(f"{os.path.basename(src)}: {e}")
-        q.update_transfer(_db, xid, "running", int(i * 100 / total))
+        pct = int(i * 100 / total)
+        set_job_progress(job_id, pct)
+        q.update_transfer(_db, xid, "running", pct)
     if failed:
         q.update_transfer(_db, xid, "error", 100, "; ".join(failed))
         logger.warning("transfer %s failed: %s", job_id, "; ".join(failed))
@@ -473,8 +476,20 @@ def _run_transfer(job_id: str, session_ids: list, dest: dict, xid: str) -> None:
     else:
         q.update_transfer(_db, xid, "success", 100)
         logger.info("transfer %s success: %d files", job_id, len(copied))
-        # ponytail: sync copy in request; move to thread when RAW files grow large (contract unchanged)
         finish_job(job_id, {"copied": copied, "failed": failed, "dest": base})
+
+
+def _run_transfer_thread(job_id: str, session_ids: list, dest: dict, xid: str) -> None:
+    # PRD §23: file besar tak boleh memblokir worker; kontrak job tetap sama.
+    try:
+        _run_transfer(job_id, session_ids, dest, xid)
+    except Exception as e:  # noqa: BLE001 — job tak boleh gantung tanpa status
+        logger.warning("transfer %s crashed: %s", job_id, e)
+        try:
+            q.update_transfer(_db, xid, "error", 0, str(e))
+        except Exception:
+            pass
+        fail_job(job_id, str(e))
 
 
 app = create_app()

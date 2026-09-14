@@ -73,6 +73,10 @@ def test_capture_process_chain(api):
         sidecar = json.load(f)
     assert sidecar["hole_id"] == "Core01" and sidecar["md5"] == res["result"]["md5"]
     assert sidecar["operator"] == "Dimas" and sidecar["crop"]["size"] == [300, 200]
+    for key in ("hole_id", "tray_id", "interval_from", "interval_to", "path", "comments",
+                "date", "operator", "site", "md5", "timestamp", "rows", "length", "width",
+                "crop", "filename"):
+        assert key in sidecar, key
     photos = api.get("/photos", params={"drillhole": "Core01"}).json()["photos"]
     assert len(photos) == 1 and photos[0]["validation"] is None
     from app.filenames import validate_filename as _vf
@@ -128,6 +132,7 @@ def test_retake_reuses_tray(api):
 
 
 def test_transfer_flow_keeps_local(api):
+    import time as _time
     s = _session(api)
     t = _tray(api, s["id"])
     cap = api.post("/captures", json={"filename": "Core01_1_000.00_2.60.jpg", "tray_id": t["id"],
@@ -141,14 +146,23 @@ def test_transfer_flow_keeps_local(api):
     dest = os.path.join(api.out, "srv")
     good = api.post("/transfer", json={"session_ids": [s["id"]],
                                        "destination": {"type": "folder", "path": dest}}).json()["job_id"]
-    res = _job(api, good)
-    assert res["status"] == "done" and not res["result"]["failed"]
+
+    def _wait(jid):
+        for _ in range(100):
+            job = _job(api, jid)
+            if job["status"] in ("done", "error"):
+                return job
+            _time.sleep(0.05)
+        raise AssertionError(f"job {jid} tak selesai")
+
+    res = _wait(good)
+    assert res["status"] == "done" and res["progress"] == 100 and not res["result"]["failed"]
     rawdir = os.path.dirname(raw)
     for f in res["result"]["copied"]:
         assert md5_file(os.path.join(dest, f)) == md5_file(os.path.join(rawdir, f))
     assert os.path.exists(raw)  # tetap ada setelah transfer
     retry = api.post(f"/transfer/{good}/retry").json()["job_id"]
-    assert _job(api, retry)["status"] == "done"
+    assert _wait(retry)["status"] == "done"
     assert api.post("/transfer/job-0/retry").status_code == 404
 
 

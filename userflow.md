@@ -60,10 +60,13 @@ bukan dari target PRD. Semua endpoint di bawah adalah localhost
 - Kosong → teks `Belum ada hasil capture`, kedua tombol disabled.
 - Ada hasil → kotak hitam menampilkan **teks path file** (bukan gambar),
   plus ID tray.
-- **Save** → `POST /process`: crop 300×200 → `*_display.jpg` + `*_thumb.jpg` +
-  sidecar `{nama}.json` + baris photo di DB; tampil path JPG-nya.
+- **Save** → `POST /process`: crop 300×200 dari posisi Box hasil framing →
+  JPG final pakai nama kanonis (`Core01_1_000.00_2.60.jpg`, lolos validator),
+  RAW digeser ke `*_raw.jpg` (isi tak berubah), plus `*_thumb.jpg` +
+  sidecar `{nama}.json` 16 field.
 - **Retake** → `POST /captures/{job}/retake` (tray_id yang sama dipakai ulang):
-  file RAW milik capture itu **ditimpa** (by design), lalu kembali ke Capture.
+  file baru di folder versi baru (`_v2`, …) — file capture asal utuh,
+  lalu kembali ke Capture.
 
 ## 6. Photo Browser (tab Browser)
 
@@ -78,15 +81,19 @@ bukan dari target PRD. Semua endpoint di bawah adalah localhost
 - Isi Tray ID (mis. `t1`) → **Validate** → `POST /trays/validate`.
 - Tampil status hijau `VALID` atau merah `INVALID` + daftar `field: masalah`
   (interval, filename, kelengkapan data). Status tersimpan di tray.
-- Tidak ada aksi perbaiki otomatis — betulkan via Capture (tray/form baru)
-  lalu Validate ulang.
+- INVALID → tombol **Edit & Re-validate**: form 8 field terisi data tray,
+  ubah → **Save Correction** (`PATCH /trays/{id}`, ditolak 422 bila interval
+  invalid) → status direset → validasi ulang otomatis. Foto baru yang masuk
+  juga mereset status (wajib re-validate).
 
 ## 8. Transfer (tab Transfer)
 
 - Daftar session dengan checkbox + kolom folder tujuan + tombol
   **Check Connection** → `reachable` / `unreachable: alasan`.
 - Pilih ≥1 session (kosong → `Pilih minimal 1 session`) → **Start Transfer**.
-- Progress bar + status: `Success: [...]` atau `Error: ...`.
+- Progress bar (persen per file, dari polling job) + status: `Success: [...]`
+  atau `Error: ...`. Copy jalan di thread latar — UI/API tetap responsif
+  untuk file besar; MD5 dihitung streaming (hemat memori).
 - Yang disalin per foto: RAW + JPG + thumb + sidecar JSON, dicek MD5 per file;
   gagal → job error berisi daftar file. File lokal **tidak dihapus**.
 - **Retry** aktif setelah ada job → menjalankan ulang transfer yang sama
@@ -105,7 +112,9 @@ bukan dari target PRD. Semua endpoint di bawah adalah localhost
 
 - Kamera nyata (Canon/Nikon/Sony) belum didukung — yang jalan `FakeAdapter`;
   tambah adapter = implementasi `ICameraAdapter` + daftarkan ke `CameraManager`.
-- Box crop selalu `[0, 0]` (framing interaktif belum ada); folder output capture
+- Framing: tap Live View menandai sudut Box Core (marker kuning + label
+  `Box: x%, y%`); posisi itu yang dipakai crop (bukan [0,0]).
+  Box selalu dijepit ke dalam foto.
   selalu relatif `captures/` (bukan Documents).
 - Tidak ada login/user — siapa pun yang membuka aplikasi memakai data yang sama.
 - Transfer sinkron di request (aman untuk file kecil/fake; RAW besar butuh
