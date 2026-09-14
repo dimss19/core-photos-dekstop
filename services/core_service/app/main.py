@@ -290,8 +290,13 @@ def create_app() -> FastAPI:
             with Image.open(raw_path) as _im:
                 _w, _h = _im.size
             box = resolve_box(payload.get("box", [0, 0]), _w, _h)
-            stem, _ = os.path.splitext(raw_path)
-            jpg_path, thumb_path, sidecar_path = stem + "_display.jpg", stem + "_thumb.jpg", stem + ".json"
+            stem, ext = os.path.splitext(raw_path)
+            # PRD §14: filename final kanonis milik JPG deliverable;
+            # RAW digeser ke {stem}_raw (isi tak berubah), bukan sebaliknya.
+            raw_kept = stem + "_raw" + ext
+            os.replace(raw_path, raw_kept)
+            raw_path = raw_kept
+            jpg_path, thumb_path, sidecar_path = stem + ext, stem + "_thumb.jpg", stem + ".json"
             crop = crop_tray(raw_path, jpg_path, thumb_path, box)
             md5 = md5_file(raw_path)
             session = q.get_session(_db, tray["session_id"]) or {}
@@ -413,7 +418,7 @@ def _run_transfer(job_id: str, session_ids: list, dest: dict, xid: str) -> None:
             for key in ("raw_path", "jpg_path", "thumb_path"):
                 if p.get(key):
                     files.append(p[key])
-            stem, _ = os.path.splitext(p.get("raw_path", ""))
+            stem, _ = os.path.splitext(p.get("jpg_path", ""))
             if stem and os.path.exists(stem + ".json"):
                 files.append(stem + ".json")
     total = max(1, len(files))

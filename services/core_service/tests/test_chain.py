@@ -74,6 +74,9 @@ def test_capture_process_chain(api):
     assert sidecar["operator"] == "Dimas" and sidecar["crop"]["size"] == [300, 200]
     photos = api.get("/photos", params={"drillhole": "Core01"}).json()["photos"]
     assert len(photos) == 1 and photos[0]["validation"] is None
+    from app.filenames import validate_filename as _vf
+    assert _vf(os.path.basename(res["result"]["jpg_path"]))["valid"] is True
+    assert os.path.basename(res["result"]["jpg_path"]) == "Core01_1_000.00_2.60.jpg"
     thumb = api.get(f"/photos/{photos[0]['id']}/file", params={"variant": "thumb"})
     assert thumb.status_code == 200 and thumb.content[:2] == b"\xff\xd8"
     assert api.get("/photos/p9/file").status_code == 404
