@@ -1,26 +1,174 @@
+import 'dart:async';
+
+import 'package:core_photo/api_client.dart';
+import 'package:core_photo/tray_form.dart';
+import 'package:core_photo/workflow.dart';
 import 'package:flutter/material.dart';
 
 import 'helpers.dart';
 
-class CaptureScreen extends StatelessWidget {
-  const CaptureScreen({super.key});
+/// Layar Capture: form tray (PRD §7) + validasi §8 + Live View + Take Picture.
+/// [onCaptured] dipanggil dengan {job_id, raw_path, tray_id, box} setelah job done.
+class CaptureScreen extends StatefulWidget {
+  const CaptureScreen({super.key, required this.api, required this.workflow, required this.sessionId, required this.onCaptured});
+
+  final ApiClient api;
+  final WorkflowState workflow;
+  final String sessionId;
+  final void Function(Map<String, dynamic> capture) onCaptured;
+
+  @override
+  State<CaptureScreen> createState() => _CaptureScreenState();
+}
+
+class _CaptureScreenState extends State<CaptureScreen> {
+  final _form = TrayForm();
+  final _controllers = <String, TextEditingController>{};
+  String? _warning;
+  String? _status;
+  String? _trayId;
+  bool _busy = false;
+  int _frameBuster = 0;
+
+  TextEditingController _c(String key, [String initial = '']) =>
+      _controllers.putIfAbsent(key, () => TextEditingController(text: initial));
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _syncForm() {
+    _form
+      ..holeId = _c('hole').text
+      ..trayId = _c('tray').text
+      ..intervalFrom = _c('from').text
+      ..intervalTo = _c('to').text
+      ..rows = _c('rows').text
+      ..length = _c('length').text
+      ..width = _c('width').text
+      ..comments = _c('comments').text;
+  }
+
+  Future<Map<String, dynamic>> _pollJob(String jobId) async {
+    for (var i = 0; i < 60; i++) {
+      final job = await widget.api.jobStatus(jobId);
+      if (job['status'] == 'done' || job['status'] == 'error') return job;
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+    return {'status': 'error', 'error': 'timeout menunggu job $jobId'};
+  }
+
+  Future<void> _validateAndCreate() async {
+    _syncForm();
+    final warning = _form.warning;
+    setState(() {
+      _warning = warning;
+      _trayId = null;
+    });
+    widget.workflow.setIntervalValid(warning == null);
+    if (warning != null) return;
+    setState(() => _busy = true);
+    try {
+      final res = await widget.api.createTray(_form.toJson(widget.sessionId));
+      if (mounted) setState(() => _trayId = (res['tray'] as Map)['id'] as String);
+      widget.workflow.toReadyToCapture();
+    } catch (e) {
+      if (mounted) setState(() => _warning = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _takePicture() async {
+    if (_trayId == null || !_form.canCapture) return;
+    setState(() {
+      _busy = true;
+      _status = 'Capturing...';
+    });
+    try {
+      widget.workflow.toCapturing();
+      final cap = await widget.api.capture(filename: _form.filename(), box: const [0, 0], outDir: 'captures');
+      final job = await _pollJob((cap['job_id'] ?? cap['jobId'] ?? '').toString());
+      if (job['status'] != 'done') throw Exception(job['error'] ?? 'capture gagal');
+      widget.workflow.toReviewing();
+      widget.onCaptured({
+        'job_id': (cap['job_id'] ?? cap['jobId']).toString(),
+        'raw_path': (job['result'] as Map)['raw_path'],
+        'tray_id': _trayId!,
+        'box': [0, 0],
+      });
+    } catch (e) {
+      if (mounted) setState(() => _status = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    _syncForm();
+    final warning = _warning ?? _form.warning;
+    final canCapture = _form.canCapture && _trayId != null && !_busy;
     return Scaffold(
       appBar: AppBar(title: const Text('Capture')),
-      body: Stack(
-        children: [
-          Container(color: Colors.black, child: const Center(child: Text('Live View'))),
-          const GridOverlay(),
-          const ZoomOverlay(zoom: 1.0),
-          Positioned(bottom: 16, left: 0, right: 0, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            TextButton(onPressed: () {}, child: const Text('Grid', style: TextStyle(color: Colors.white))),
-            TextButton(onPressed: () {}, child: const Text('Zoom', style: TextStyle(color: Colors.white))),
-            TextButton(onPressed: () {}, child: const Text('Take Picture', style: TextStyle(color: Colors.white))),
-          ])),
+      // Column, bukan ListView: semua field harus ada di tree (validasi live + testing).
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+          _field('hole', 'Hole ID'),
+          _field('tray', 'Tray ID'),
+          Row(children: [Expanded(child: _field('from', 'From')), const SizedBox(width: 8), Expanded(child: _field('to', 'To'))]),
+          Row(children: [Expanded(child: _field('rows', 'Rows')), const SizedBox(width: 8), Expanded(child: _field('length', 'Length')), const SizedBox(width: 8), Expanded(child: _field('width', 'Width'))]),
+          _field('comments', 'Comments'),
+          if (warning != null) Text(warning, key: const Key('warning'), style: const TextStyle(color: Colors.red)),
+          ElevatedButton(onPressed: _busy ? null : _validateAndCreate, child: const Text('Validate Tray')),
+          const SizedBox(height: 8),
+          Container(
+            key: const Key('liveview'),
+            height: 180,
+            color: Colors.black,
+            child: Stack(
+              children: [
+                Center(
+                  child: Image.network(
+                    '${widget.api.baseUrl}/camera/frame?b=$_frameBuster',
+                    errorBuilder: (_, _, _) => const Text('Live View (offline)', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+                const GridOverlay(),
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: TextButton(
+                    onPressed: () => setState(() => _frameBuster++),
+                    child: const Text('Refresh', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            key: const Key('capture'),
+            onPressed: canCapture ? _takePicture : null,
+            child: const Text('Take Picture'),
+          ),
+          if (_status != null) Text(_status!),
         ],
+      ),
       ),
     );
   }
+
+  Widget _field(String key, String label) => TextField(
+        key: Key('tray_$key'),
+        controller: _c(key),
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(labelText: label),
+      );
 }

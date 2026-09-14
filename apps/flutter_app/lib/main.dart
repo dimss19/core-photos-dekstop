@@ -29,14 +29,24 @@ class _CorePhotoAppState extends State<CorePhotoApp> {
   int _index = 0;
   late final ApiClient _api = widget.api ?? ApiClient(baseUrl: widget.apiBaseUrl);
   late final WorkflowState _workflow = WorkflowState();
+  String _sessionId = '';
+  Map<String, dynamic>? _lastCapture;
 
   @override
   Widget build(BuildContext context) {
     final pages = [
       DashboardScreen(api: _api, onOpen: (index) => setState(() => _index = index)),
-      SessionScreen(api: _api, workflow: _workflow),
-      const CaptureScreen(),
-      const ReviewScreen(),
+      SessionScreen(api: _api, workflow: _workflow, onActive: (id) => setState(() => _sessionId = id)),
+      CaptureScreen(
+        api: _api,
+        workflow: _workflow,
+        sessionId: _sessionId,
+        onCaptured: (c) => setState(() {
+          _lastCapture = c;
+          _index = 3;
+        }),
+      ),
+      ReviewScreen(api: _api, workflow: _workflow, capture: _lastCapture, onProcessed: (_) {}),
       const BrowserScreen(),
       const ValidationScreen(),
       const TransferScreen(),

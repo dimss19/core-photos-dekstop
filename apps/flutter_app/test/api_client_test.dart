@@ -48,4 +48,38 @@ void main() {
     final api = ApiClient(baseUrl: 'http://127.0.0.1:${server.port}');
     expect(() => api.activeSession(), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 404)));
   });
+
+  test('tray + process + photos + transfer roundtrip paths', () async {
+    final seen = <String>[];
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    server.listen((req) async {
+      seen.add('${req.method} ${req.uri.path}?${req.uri.query}');
+      await utf8.decoder.bind(req).join();
+      Object out = const {};
+      if (req.uri.path == '/trays') out = {'tray': {'id': 't1'}};
+      if (req.uri.path == '/trays/validate') out = {'valid': true, 'status': 'VALID', 'errors': {}};
+      if (req.uri.path == '/process') out = {'job_id': 'job-1'};
+      if (req.uri.path == '/photos') out = {'photos': []};
+      if (req.uri.path == '/transfer/check') out = {'reachable': true, 'detail': 'writable'};
+      if (req.uri.path == '/transfer') out = {'job_id': 'job-2'};
+      if (req.uri.path == '/transfer/job-2/retry') out = {'job_id': 'job-3'};
+      if (req.uri.path == '/captures/job-1/retake') out = {'job_id': 'job-4'};
+      req.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode(out));
+      await req.response.close();
+    });
+    final api = ApiClient(baseUrl: 'http://127.0.0.1:${server.port}');
+    expect((await api.createTray({'hole_id': 'Core01'}))['tray']['id'], 't1');
+    expect((await api.validateTray('t1'))['status'], 'VALID');
+    expect((await api.processCapture(rawPath: '/r.jpg', trayId: 't1'))['job_id'], 'job-1');
+    expect((await api.retakeCapture('job-1', {}))['job_id'], 'job-4');
+    expect(await api.listPhotos(drillhole: 'Core01'), {'photos': []});
+    expect(api.photoFileUrl('p1'), contains('/photos/p1/file?variant=jpg'));
+    expect((await api.transferCheck({'type': 'folder'}))['reachable'], isTrue);
+    expect((await api.transferStart(sessionIds: ['s1'], destination: {'type': 'folder'}))['job_id'], 'job-2');
+    expect((await api.transferRetry('job-2'))['job_id'], 'job-3');
+    expect(seen, contains('GET /photos?drillhole=Core01'));
+  });
 }

@@ -5,10 +5,11 @@ import '../session.dart';
 import '../workflow.dart';
 
 class SessionScreen extends StatefulWidget {
-  const SessionScreen({super.key, required this.api, required this.workflow});
+  const SessionScreen({super.key, required this.api, required this.workflow, this.onActive});
 
   final ApiClient api;
   final WorkflowState workflow;
+  final void Function(String sessionId)? onActive;
 
   @override
   State<SessionScreen> createState() => _SessionScreenState();
@@ -49,7 +50,8 @@ class _SessionScreenState extends State<SessionScreen> {
     }
     setState(() => _error = null);
     try {
-      await SessionService(widget.api).create(date: _date.text.trim(), operator: _operator.text.trim(), site: _site.text.trim());
+      final created = await SessionService(widget.api).create(date: _date.text.trim(), operator: _operator.text.trim(), site: _site.text.trim());
+      widget.onActive?.call(created.id);
       await _refresh();
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
@@ -59,6 +61,7 @@ class _SessionScreenState extends State<SessionScreen> {
   Future<void> _activate(String id) async {
     try {
       await SessionService(widget.api).activate(id);
+      widget.onActive?.call(id);
       await _refresh();
     } catch (error) {
       if (mounted) setState(() => _error = '$error');

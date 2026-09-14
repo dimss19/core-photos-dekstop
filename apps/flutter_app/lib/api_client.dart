@@ -41,4 +41,21 @@ class ApiClient {
   Future<Map<String, dynamic>> listSessions() => getJson('/sessions');
   Future<Map<String, dynamic>> activateSession(String id) => postJson('/sessions/$id/activate', {});
   Future<Map<String, dynamic>> activeSession() => getJson('/sessions/active');
+  Future<Map<String, dynamic>> createTray(Map<String, dynamic> tray) => postJson('/trays', tray);
+  Future<Map<String, dynamic>> validateTray(String trayId) => postJson('/trays/validate', {'tray_id': trayId});
+  Future<Map<String, dynamic>> processCapture({required String rawPath, required String trayId, List<int> box = const [0, 0]}) =>
+      postJson('/process', {'raw_path': rawPath, 'tray_id': trayId, 'box': box});
+  Future<Map<String, dynamic>> retakeCapture(String jobId, Map<String, dynamic> payload) =>
+      postJson('/captures/$jobId/retake', payload);
+  Future<Map<String, dynamic>> listPhotos({String? drillhole, String? sessionId}) {
+    final q = [if (drillhole != null) 'drillhole=$drillhole', if (sessionId != null) 'session_id=$sessionId'].join('&');
+    return getJson(q.isEmpty ? '/photos' : '/photos?$q');
+  }
+
+  String photoFileUrl(String photoId, [String variant = 'jpg']) => '$baseUrl/photos/$photoId/file?variant=$variant';
+  Future<Map<String, dynamic>> transferCheck(Map<String, dynamic> destination) =>
+      postJson('/transfer/check', {'destination': destination});
+  Future<Map<String, dynamic>> transferStart({required List<String> sessionIds, required Map<String, dynamic> destination}) =>
+      postJson('/transfer', {'session_ids': sessionIds, 'destination': destination});
+  Future<Map<String, dynamic>> transferRetry(String jobId) => postJson('/transfer/$jobId/retry', {});
 }
