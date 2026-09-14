@@ -15,7 +15,7 @@ from app.db import Database
 from app.db.schema import init_schema
 from app.db import queries as q
 from app.filenames import validate_filename
-from app.imaging import crop_tray
+from app.imaging import crop_tray, resolve_box
 from app.jobs import create_job, finish_job, fail_job, get_job
 from app.storage import atomic_write_json, build_sidecar, md5_file, resolve_tray_dir
 from app.validation import validate_interval, validate_tray
@@ -286,7 +286,10 @@ def create_app() -> FastAPI:
             fail_job(job["id"], fc.get("warning", "invalid filename"))
             return {"job_id": job["id"]}
         try:
-            box = payload.get("box", [0, 0])
+            from PIL import Image
+            with Image.open(raw_path) as _im:
+                _w, _h = _im.size
+            box = resolve_box(payload.get("box", [0, 0]), _w, _h)
             stem, _ = os.path.splitext(raw_path)
             jpg_path, thumb_path, sidecar_path = stem + "_display.jpg", stem + "_thumb.jpg", stem + ".json"
             crop = crop_tray(raw_path, jpg_path, thumb_path, box)

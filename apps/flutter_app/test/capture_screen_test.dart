@@ -56,6 +56,9 @@ void main() {
     Map<String, dynamic>? got;
     await tester.pumpWidget(_screen((c) => got = c));
     await _fillValid(tester);
+    await tester.tapAt(tester.getCenter(find.byKey(const Key('liveview'))));
+    await tester.pump();
+    expect(find.textContaining('Box: 50%, 50%'), findsOneWidget);
     await tester.ensureVisible(find.text('Validate Tray'));
     await tester.tap(find.text('Validate Tray'));
     await tester.pumpAndSettle();
@@ -64,5 +67,6 @@ void main() {
     await tester.tap(find.byKey(const Key('capture')));
     await tester.pumpAndSettle();
     expect(got?['raw_path'], '/tmp/r.jpg');
+    expect((got?['box'] as List).map((e) => (e as num).toDouble()).toList(), [0.5, 0.5]);
   });
 }

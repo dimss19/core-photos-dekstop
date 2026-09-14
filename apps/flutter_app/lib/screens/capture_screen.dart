@@ -29,6 +29,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
   String? _trayId;
   bool _busy = false;
   int _frameBuster = 0;
+  double _fx = 0.0;
+  double _fy = 0.0;
 
   TextEditingController _c(String key, [String initial = '']) =>
       _controllers.putIfAbsent(key, () => TextEditingController(text: initial));
@@ -91,7 +93,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     });
     try {
       widget.workflow.toCapturing();
-      final cap = await widget.api.capture(filename: _form.filename(), box: const [0, 0], outDir: 'captures');
+      final cap = await widget.api.capture(filename: _form.filename(), box: [_fx, _fy], outDir: 'captures');
       final job = await _pollJob((cap['job_id'] ?? cap['jobId'] ?? '').toString());
       if (job['status'] != 'done') throw Exception(job['error'] ?? 'capture gagal');
       widget.workflow.toReviewing();
@@ -99,7 +101,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
         'job_id': (cap['job_id'] ?? cap['jobId']).toString(),
         'raw_path': (job['result'] as Map)['raw_path'],
         'tray_id': _trayId!,
-        'box': [0, 0],
+        'box': [_fx, _fy],
       });
     } catch (e) {
       if (mounted) setState(() => _status = '$e');
@@ -132,26 +134,47 @@ class _CaptureScreenState extends State<CaptureScreen> {
             key: const Key('liveview'),
             height: 180,
             color: Colors.black,
-            child: Stack(
-              children: [
-                Center(
-                  child: Image.network(
-                    '${widget.api.baseUrl}/camera/frame?b=$_frameBuster',
-                    errorBuilder: (_, _, _) => const Text('Live View (offline)', style: TextStyle(color: Colors.white)),
-                  ),
+            child: LayoutBuilder(
+              builder: (context, constraints) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (d) => setState(() {
+                  _fx = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
+                  _fy = (d.localPosition.dy / constraints.maxHeight).clamp(0.0, 1.0);
+                }),
+                child: Stack(
+                  children: [
+                    Center(
+                      child: Image.network(
+                        '${widget.api.baseUrl}/camera/frame?b=$_frameBuster',
+                        errorBuilder: (_, _, _) => const Text('Live View (offline)', style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                    const GridOverlay(),
+                    Positioned(
+                      left: _fx * constraints.maxWidth - 12,
+                      top: _fy * constraints.maxHeight - 12,
+                      child: Container(
+                        key: const Key('boxmarker'),
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(border: Border.all(color: Colors.yellow, width: 2)),
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: TextButton(
+                        onPressed: () => setState(() => _frameBuster++),
+                        child: const Text('Refresh', style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ],
                 ),
-                const GridOverlay(),
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: TextButton(
-                    onPressed: () => setState(() => _frameBuster++),
-                    child: const Text('Refresh', style: TextStyle(color: Colors.white)),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
+          Text('Box: ${(_fx * 100).toInt()}%, ${(_fy * 100).toInt()}% (tap Live View untuk framing)',
+              key: const Key('boxlabel')),
           const SizedBox(height: 8),
           ElevatedButton(
             key: const Key('capture'),
