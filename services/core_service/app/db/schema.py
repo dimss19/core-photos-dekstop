@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS transfers (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     selection TEXT NOT NULL,
+    destination TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL,
     progress INTEGER NOT NULL,
     validated_at REAL,
@@ -62,4 +63,6 @@ CREATE TABLE IF NOT EXISTS schema_info (
 def init_schema(db: Database) -> None:
     with db.transaction() as cur:
         cur.executescript(CREATE_TABLES)
-        cur.execute('INSERT INTO schema_info (version) VALUES (?)', (SCHEMA_VERSION,))
+        cur.execute('SELECT COUNT(*) FROM schema_info')
+        if cur.fetchone()[0] == 0:
+            cur.execute('INSERT INTO schema_info (version) VALUES (?)', (SCHEMA_VERSION,))
