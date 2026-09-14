@@ -65,6 +65,7 @@ void main() {
       if (req.uri.path == '/transfer') out = {'job_id': 'job-2'};
       if (req.uri.path == '/transfer/job-2/retry') out = {'job_id': 'job-3'};
       if (req.uri.path == '/captures/job-1/retake') out = {'job_id': 'job-4'};
+      if (req.uri.path == '/camera/capabilities') out = {'adapter': 'fake', 'supports_capture': true};
       req.response
         ..headers.contentType = ContentType.json
         ..write(jsonEncode(out));
@@ -75,6 +76,7 @@ void main() {
     expect((await api.validateTray('t1'))['status'], 'VALID');
     expect((await api.processCapture(rawPath: '/r.jpg', trayId: 't1'))['job_id'], 'job-1');
     expect((await api.retakeCapture('job-1', {}))['job_id'], 'job-4');
+    expect((await api.cameraCapabilities())['supports_capture'], isTrue);
     expect(await api.listPhotos(drillhole: 'Core01'), {'photos': []});
     expect(api.photoFileUrl('p1'), contains('/photos/p1/file?variant=jpg'));
     expect((await api.transferCheck({'type': 'folder'}))['reachable'], isTrue);

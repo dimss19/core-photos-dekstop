@@ -34,6 +34,7 @@ class ApiClient {
   Future<Map<String, dynamic>> validateInterval(double from, double to) => postJson('/trays/validate-interval', {'from': from, 'to': to});
   Future<Map<String, dynamic>> jobStatus(String id) => getJson('/jobs/$id');
   Future<Map<String, dynamic>> cameraStatus() => getJson('/camera/status');
+  Future<Map<String, dynamic>> cameraCapabilities() => getJson('/camera/capabilities');
   Future<Map<String, dynamic>> capture({required String filename, required List<int> box, required String outDir}) =>
       postJson('/captures', {'filename': filename, 'box': box, 'out_dir': outDir});
   Future<Map<String, dynamic>> createSession({required String date, required String operator, required String site}) =>

@@ -50,7 +50,7 @@ class _CorePhotoAppState extends State<CorePhotoApp> {
       BrowserScreen(api: _api),
       ValidationScreen(api: _api),
       TransferScreen(api: _api),
-      const SettingsScreen(),
+      SettingsScreen(api: _api),
     ];
     return MaterialApp(
       title: 'Core Photo',
