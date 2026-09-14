@@ -36,6 +36,9 @@ coverage.xml
 services/core_service/dist/
 services/core_service/build/
 services/core_service/*.spec
+build-installer/
+dist/
+*.spec
 *.manifest
 
 # Windows build outputs
