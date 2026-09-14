@@ -47,9 +47,9 @@ class _CorePhotoAppState extends State<CorePhotoApp> {
         }),
       ),
       ReviewScreen(api: _api, workflow: _workflow, capture: _lastCapture, onProcessed: (_) {}),
-      const BrowserScreen(),
-      const ValidationScreen(),
-      const TransferScreen(),
+      BrowserScreen(api: _api),
+      ValidationScreen(api: _api),
+      TransferScreen(api: _api),
       const SettingsScreen(),
     ];
     return MaterialApp(

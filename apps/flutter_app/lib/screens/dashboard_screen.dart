@@ -19,6 +19,14 @@ class DashboardScreen extends StatelessWidget {
             future: api.cameraStatus().catchError((_) => {'status': 'Unknown'}),
             builder: (context, snapshot) => Text('Camera: ${snapshot.data?['status'] ?? '...'}'),
           ),
+          FutureBuilder<Map<String, dynamic>>(
+            future: api.activeSession().catchError((_) => {'active': null}),
+            builder: (context, snapshot) {
+              final active = snapshot.data?['active'];
+              final label = active == null ? '-' : '${active['operator']} @ ${active['site']}';
+              return Text('Session: $label');
+            },
+          ),
           for (final entry in const {'Session': 1, 'Capture': 2, 'Photo Browser': 3, 'Validation': 4, 'Transfer': 5, 'Settings': 6}.entries)
             ListTile(title: Text(entry.key), onTap: () => onOpen(entry.value)),
         ],
