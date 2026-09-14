@@ -11,7 +11,10 @@ validation/local storage berjalan **offline**; network hanya untuk Transfer.
 1. Unduh `CorePhoto-Setup-vX.Y.Z.exe` (satu file installer).
 2. Double-click → Next → pilih folder (default `Program Files\Core Photo`).
 3. Installer memasang `CorePhoto.exe` (Flutter UI) + `core_service.exe`
-   (Python local service) + SDK kamera + VC++ Redist bila belum ada.
+   (Python local service) + VC++ Redist bila belum ada. Script installer
+   di `installer/corephoto.iss` (kompilasi via `iscc`, lihat `installer/BUILD.md`).
+   Driver/SDK kamera vendor (Canon/Nikon/Sony) fase hardware; saat ini
+   service memakai adapter kamera generik.
 4. Shortcut Start Menu / Desktop dibuat. Data runtime (SQLite, log, token)
    otomatis di `%LOCALAPPDATA%\CorePhoto\`; foto default di `Documents\CorePhoto\`
    (bisa diubah di Settings). Tidak perlu install Python/Flutter terpisah.
@@ -19,8 +22,10 @@ validation/local storage berjalan **offline**; network hanya untuk Transfer.
 
 ## 2. Buka Aplikasi & Dashboard
 
-1. Buka aplikasi dari shortcut → Flutter otomatis start `core_service.exe`
-   dan health-check `127.0.0.1` (status koneksi service ditampilkan).
+1. Buka aplikasi dari shortcut. Jika `core_service.exe` belum jalan
+   (mis. development), jalankan manual / via SidecarLauncher sebelum membuka
+   layar yang butuh API — Dashboard menampilkan status koneksi service.
+   (Auto-start sidecar dari Flutter menyusul paket installer final.)
 2. Dashboard menampilkan:
    - Session aktif (atau "-");
    - Status kamera (`Connected/Ready` | `Not Connected` | `Error`);
@@ -36,11 +41,12 @@ validation/local storage berjalan **offline**; network hanya untuk Transfer.
 ## 4. Siapkan Kamera (PRD §6)
 
 1. Hubungkan kamera DSLR/Mirrorless (Canon/Nikon/Sony) via USB ke workstation.
-2. Di aplikasi: **Connect Camera** (atau otomatis saat buka Capture).
-   - Terdeteksi → status `Connected/Ready`.
-   - Tidak terdeteksi → error jelas + tombol Detect Again.
-3. Atur bila perlu (Settings / layar Capture): ISO (acuan +1200),
-   Focus, Zoom — yang tidak didukung kamera tetap aman (unsupported, tanpa crash).
+2. Status kamera tampil di Dashboard (`Connected/Ready` | `Not Connected` | `Error`).
+   Koneksi dilakukan via endpoint `POST /camera/connect` (otomatis saat service
+   start dengan adapter yang tersedia); kamera tak terdeteksi → status Error
+   dengan detail, dan Capture diblokir sampai kamera kembali.
+3. Lihat capability nyata di **Settings** (Live View/ISO/Focus/Zoom/Capture:
+   Ya/Tidak). ISO acuan +1200; yang unsupported tetap aman tanpa crash.
 4. Jika kamera putus di tengah workflow: Capture diblokir sampai kamera kembali.
 
 ## 5. Input Data Tray (PRD §7–§8)
@@ -48,21 +54,28 @@ validation/local storage berjalan **offline**; network hanya untuk Transfer.
 1. Buka **Capture** → isi Tray Data:
    Hole ID, Tray ID, Core Interval From/To, Tray Rows, Tray Length,
    Tray Width, Comments.
-2. **Interval Validation** otomatis:
+2. **Interval Validation** otomatis saat mengetik:
    - `To < From` → warning + tombol **Take Picture disabled**.
-   - Perbaiki nilai → valid → Capture aktif kembali.
+   - Perbaiki nilai → warning hilang.
+3. Tekan **Validate Tray** → tray tersimpan di server. Baru setelah itu
+   **Take Picture** aktif (syarat: form valid + tray tersimpan + kamera ready).
 
 ## 6. Live View & Framing (PRD §9)
 
 1. Letakkan tray/core di photography station.
-2. Buka **Live View** (stream MJPEG localhost; Start/Stop lifecycle).
-3. Pastikan posisi tray; gunakan **Grid** dan **Zoom overlay** untuk framing.
-4. Lanjut ke Capture.
+2. Panel **Live View** menampilkan frame terakhir dari kamera
+   (`GET /camera/frame`) + overlay **Grid**; tekan **Refresh** untuk frame baru.
+   (Stream MJPEG kontinu tersedia di endpoint `/camera/liveview.mjpg` untuk
+   fase berikutnya.)
+3. Pastikan posisi tray, lalu lanjut ke Capture.
 
 ## 7. Capture (PRD §10)
 
-1. Tekan **Take Picture** (aktif hanya jika Tray valid + kamera ready).
-2. Foto diterima dari kamera → dikaitkan ke Session + Tray aktif.
+1. Tekan **Take Picture** (aktif hanya jika form valid + tray tersimpan
+   via Validate Tray + kamera ready).
+2. Foto diterima dari kamera → disimpan sebagai RAW di folder tray versi
+   (`.../HoleID_LabelTray/`; otomatis `_v2`, `_v3` bila sudah ada) → dikaitkan
+   ke Session + Tray aktif.
 3. Otomatis masuk layar **Review**.
 
 ## 8. Review & Retake (PRD §11)
@@ -76,11 +89,13 @@ validation/local storage berjalan **offline**; network hanya untuk Transfer.
 
 Setelah Save, tanpa aksi operator:
 
-1. **RAW** (file original) disimpan apa adanya.
+1. **RAW** (file original, mis. `Core01_1_000.00_2.60.jpg`) disimpan apa adanya.
 2. **Tray Crop** 300×200 patokan sudut Box Core.
-3. **JPG** + **Thumbnail** dihasilkan dari area crop.
-4. Filename format existing: `Core01_1_000.00_2.60.jpg` + sidecar `.json`
-   metadata (Hole, Tray, Interval, MD5, Timestamp, dst).
+3. **JPG** (`*_display.jpg`) + **Thumbnail** (`*_thumb.jpg`) dihasilkan dari area crop.
+4. Format filename dipertahankan (`Core01_1_000.00_2.60.jpg`; From dipad
+   `000.00` persis contoh PRD) + sidecar `{nama}.json` metadata lengkap
+   16 field PRD (Hole, Tray, Interval, Path, Comments, Date, Operator, Site,
+   MD5, Timestamp, Rows, Length, Width, Crop).
 
 ## 10. Validation (PRD §16)
 
@@ -93,35 +108,38 @@ Setelah Save, tanpa aksi operator:
 
 1. **More Tray? Yes** → kembali ke Input Data Tray (langkah 5).
 2. **No** → session selesai → ke Transfer.
-3. Aturan folder: Drillhole ID sama → folder baru otomatis (`_v2`, `_v3`);
-   file lama tidak pernah tertimpa. File lokal tetap ada setelah Transfer.
+3. Aturan folder: setiap capture tersimpan di folder tray versi otomatis
+   (`_v2`, `_v3` bila label sama sudah ada) — file lama tidak pernah tertimpa.
+   Retake menimpa file capture-nya sendiri (by design: hasil Retake yang dipakai).
+   File lokal tetap ada setelah Transfer.
 
 ## 12. Photo Browser (PRD §18, kapan saja)
 
-1. Buka **Photo Browser** (data lokal, offline).
-2. Search/filter by Drillhole → daftar foto + Tray info + interval.
-3. Pilih item → Thumbnail + preview foto.
+1. Buka **Photo Browser** (data lokal SQLite, offline).
+2. Search/filter by Drillhole → daftar foto + Tray info + interval + Thumbnail.
+3. Tap item → dialog preview foto ukuran penuh.
 
 ## 13. Transfer ke Server (PRD §19, butuh network)
 
 1. Buka **Transfer** (terpisah dari capture).
-2. Pilih Session/data → **Check Server Connection**.
-   - Tidak bisa diakses → error + **Retry** (data lokal aman).
-3. **Start Transfer** → progress/status ditampilkan.
-4. **Validate Transfer** → Success (file lokal tetap disimpan, tidak dihapus)
-   atau Error → Retry.
+2. Isi folder tujuan (mendukung path lokal / share termount) → **Check Connection**.
+   - Tidak bisa ditulis → unreachable + detail (data lokal aman).
+3. Centang Session → **Start Transfer** → progress/status ditampilkan.
+4. Validasi MD5 per file → **Success** (file lokal tetap disimpan, tidak dihapus)
+   atau **Error** + daftar file gagal → **Retry**.
 
 ## 14. Settings (PRD §20.8)
 
-1. Folder foto, Server URL, API token (bila dipakai).
-2. Camera settings yang tersedia (ISO/Focus/Zoom capability-based).
+1. Server URL + API token (ditampilkan; diedit di kode/build berikutnya).
+2. ISO acuan +1200, Focus/Manual, Zoom — plus tabel **Kemampuan kamera**
+   nyata dari adapter (Ya/Tidak per Live View/ISO/Focus/Zoom/Capture).
 3. Tentang aplikasi / versi.
 
 ## 15. Error Handling Ringkas (PRD §22)
 
 | Kondisi | Tampilan |
 |---|---|
-| Kamera tidak terdeteksi / putus | Status + pesan + Detect Again; Capture diblokir |
+| Kamera tidak terdeteksi / putus | Status Error + detail; Capture diblokir; hubungkan ulang + Activate session bila perlu |
 | Capture gagal / setting unsupported | Pesan jelas, tanpa crash |
 | Interval invalid / filename invalid | Warning + Capture disabled |
 | Disk penuh / permission / write gagal | Pesan + aksi (bebaskan disk / cek izin) |

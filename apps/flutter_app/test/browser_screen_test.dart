@@ -32,5 +32,8 @@ void main() {
     await tester.pump();
     expect(find.text('Core01_1_000.00_2.60.jpg'), findsNothing);
     expect(find.text('Core02_1_000.00_3.00.jpg'), findsOneWidget);
+    await tester.tap(find.text('Core02_1_000.00_3.00.jpg'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tutup'), findsOneWidget);
   });
 }

@@ -2,6 +2,7 @@
 """Localhost API skeleton. Bind 127.0.0.1 only at runtime; no network exposure."""
 import logging
 import os
+import re
 import shutil
 import time
 from dataclasses import asdict
@@ -16,7 +17,7 @@ from app.db import queries as q
 from app.filenames import validate_filename
 from app.imaging import crop_tray
 from app.jobs import create_job, finish_job, fail_job, get_job
-from app.storage import atomic_write_json, build_sidecar, md5_file
+from app.storage import atomic_write_json, build_sidecar, md5_file, resolve_tray_dir
 from app.validation import validate_interval, validate_tray
 
 VERSION = "0.1.0"
@@ -175,6 +176,17 @@ def create_app() -> FastAPI:
             return {"job_id": job["id"]}
         try:
             out_dir = str(payload.get("out_dir", ""))
+            tray = None
+            if payload.get("tray_id"):
+                tray = q.get_tray(_db, str(payload["tray_id"]))
+                if tray is None:
+                    fail_job(job["id"], "unknown tray")
+                    return {"job_id": job["id"]}
+                session = q.get_session(_db, tray["session_id"]) or {}
+                label = f"{tray['hole_id']}_{tray['tray_id']}_{tray['interval_from']}-{tray['interval_to']}"
+                label = re.sub(r'[\\/:*?"<>|]+', '_', label)
+                # PRD §17.1: folder versi otomatis (_v2, _v3), file lama tak tertimpa.
+                out_dir = resolve_tray_dir(out_dir or ".", str(session.get("date", "")), tray["hole_id"], label)
             os.makedirs(out_dir, exist_ok=True)
             raw_path = os.path.join(out_dir, str(payload["filename"]))
             adapter.capture(raw_path)

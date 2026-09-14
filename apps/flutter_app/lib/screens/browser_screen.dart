@@ -73,6 +73,17 @@ class _BrowserScreenState extends State<BrowserScreen> {
                         ),
                         title: Text('${p['filename']}'),
                         subtitle: Text('${p['hole_id']} · ${p['interval_from']}–${p['interval_to']}'),
+                        onTap: () => showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: Text('${p['filename']}'),
+                            content: Image.network(
+                              widget.api.photoFileUrl(p['id'].toString(), 'jpg'),
+                              errorBuilder: (_, _, _) => const Icon(Icons.broken_image, size: 64),
+                            ),
+                            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup'))],
+                          ),
+                        ),
                       ),
                   ],
                 ),

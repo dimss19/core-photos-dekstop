@@ -54,6 +54,14 @@ def test_capture_process_chain(api):
     job = _job(api, cap["job_id"])
     assert job["status"] == "done"
     raw = job["result"]["raw_path"]
+    assert os.path.dirname(raw) != api.out and os.path.basename(raw) == "Core01_1_000.00_2.60.jpg"
+    cap2 = api.post("/captures", json={"filename": "Core01_1_000.00_2.60.jpg", "tray_id": t["id"],
+                                       "box": [0, 0], "out_dir": api.out}).json()["job_id"]
+    raw2 = _job(api, cap2)["result"]["raw_path"]
+    assert os.path.dirname(raw2) != os.path.dirname(raw) and raw2.endswith("_v2/Core01_1_000.00_2.60.jpg".replace("/", os.sep))
+    bad_tray = api.post("/captures", json={"filename": "Core01_1_000.00_2.60.jpg", "tray_id": "t9",
+                                           "box": [0, 0], "out_dir": api.out}).json()["job_id"]
+    assert _job(api, bad_tray)["status"] == "error"
     proc = api.post("/process", json={"raw_path": raw, "tray_id": t["id"], "box": [10, 20]}).json()
     res = _job(api, proc["job_id"])
     assert res["status"] == "done"
@@ -101,8 +109,9 @@ def test_transfer_flow_keeps_local(api):
                                        "destination": {"type": "folder", "path": dest}}).json()["job_id"]
     res = _job(api, good)
     assert res["status"] == "done" and not res["result"]["failed"]
+    rawdir = os.path.dirname(raw)
     for f in res["result"]["copied"]:
-        assert md5_file(os.path.join(dest, f)) == md5_file(os.path.join(api.out, f))
+        assert md5_file(os.path.join(dest, f)) == md5_file(os.path.join(rawdir, f))
     assert os.path.exists(raw)  # tetap ada setelah transfer
     retry = api.post(f"/transfer/{good}/retry").json()["job_id"]
     assert _job(api, retry)["status"] == "done"
