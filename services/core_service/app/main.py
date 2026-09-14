@@ -62,6 +62,23 @@ def _wipe_db() -> None:
             cur.execute(f"DELETE FROM {t}")
 
 
+def _capture_target(out_dir: str, tray_id: str):
+    """(out_dir, tray|None, error|None).
+
+    Tray dikenal -> folder versi otomatis (_v2, _v3): histori tak tertimpa
+    (PRD §17.1). Tanpa tray -> flat out_dir apa adanya.
+    """
+    if not tray_id:
+        return out_dir, None, None
+    tray = q.get_tray(_db, tray_id)
+    if tray is None:
+        return out_dir, None, "unknown tray"
+    session = q.get_session(_db, tray["session_id"]) or {}
+    label = f"{tray['hole_id']}_{tray['tray_id']}_{tray['interval_from']}-{tray['interval_to']}"
+    label = re.sub(r'[\\/:*?"<>|]+', '_', label)
+    return resolve_tray_dir(out_dir or ".", str(session.get("date", "")), tray["hole_id"], label), tray, None
+
+
 init_db()
 
 
@@ -176,17 +193,10 @@ def create_app() -> FastAPI:
             return {"job_id": job["id"]}
         try:
             out_dir = str(payload.get("out_dir", ""))
-            tray = None
-            if payload.get("tray_id"):
-                tray = q.get_tray(_db, str(payload["tray_id"]))
-                if tray is None:
-                    fail_job(job["id"], "unknown tray")
-                    return {"job_id": job["id"]}
-                session = q.get_session(_db, tray["session_id"]) or {}
-                label = f"{tray['hole_id']}_{tray['tray_id']}_{tray['interval_from']}-{tray['interval_to']}"
-                label = re.sub(r'[\\/:*?"<>|]+', '_', label)
-                # PRD §17.1: folder versi otomatis (_v2, _v3), file lama tak tertimpa.
-                out_dir = resolve_tray_dir(out_dir or ".", str(session.get("date", "")), tray["hole_id"], label)
+            out_dir, tray, tray_err = _capture_target(out_dir, str(payload.get("tray_id", "")))
+            if tray_err:
+                fail_job(job["id"], tray_err)
+                return {"job_id": job["id"]}
             os.makedirs(out_dir, exist_ok=True)
             raw_path = os.path.join(out_dir, str(payload["filename"]))
             adapter.capture(raw_path)
@@ -211,7 +221,10 @@ def create_app() -> FastAPI:
             fail_job(job["id"], str(e))
             return {"job_id": job["id"]}
         try:
-            out_dir = str(payload.get("out_dir", ""))
+            out_dir, _, tray_err = _capture_target(str(payload.get("out_dir", "")), tray_id)
+            if tray_err:
+                fail_job(job["id"], tray_err)
+                return {"job_id": job["id"]}
             filename = str(payload.get("filename", ""))
             if not filename:
                 fail_job(job["id"], "filename required for retake")

@@ -85,15 +85,21 @@ def test_capture_process_chain(api):
 
 
 def test_retake_reuses_tray(api):
+    from app.storage import md5_file as _md5
     s = _session(api)
     t = _tray(api, s["id"])
     cap = api.post("/captures", json={"filename": "Core01_1_000.00_2.60.jpg", "tray_id": t["id"],
                                       "box": [0, 0], "out_dir": api.out}).json()["job_id"]
+    first = _job(api, cap)["result"]["raw_path"]
     assert _job(api, cap)["status"] == "done"
+    before = _md5(first)
     re = api.post(f"/captures/{cap}/retake", json={"out_dir": api.out,
                                                   "filename": "Core01_1_000.00_2.60.jpg"}).json()["job_id"]
     job = _job(api, re)
     assert job["status"] == "done" and os.path.exists(job["result"]["raw_path"])
+    # histori tak tertimpa: file asal utuh di dir sendiri, retake di dir versi baru
+    assert os.path.dirname(job["result"]["raw_path"]) != os.path.dirname(first)
+    assert _md5(first) == before and os.path.exists(first)
 
 
 def test_transfer_flow_keeps_local(api):
