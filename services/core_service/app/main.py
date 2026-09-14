@@ -261,6 +261,24 @@ def create_app() -> FastAPI:
         )
         return {"tray": tray}
 
+    @app.get("/trays/{tid}")
+    def get_tray_record(tid: str):
+        tray = q.get_tray(_db, tid)
+        if tray is None:
+            return JSONResponse(status_code=404, content={"error": "unknown tray"})
+        return {"tray": tray}
+
+    @app.patch("/trays/{tid}")
+    def correct_tray(tid: str, payload: dict):
+        try:
+            tray = q.update_tray(_db, tid, payload if isinstance(payload, dict) else {})
+        except ValueError as e:
+            return JSONResponse(status_code=422, content={"errors": {"interval": str(e)}})
+        if tray is None:
+            return JSONResponse(status_code=404, content={"error": "unknown tray"})
+        logger.info("tray corrected: %s (validation reset)", tid)
+        return {"tray": tray}
+
     @app.post("/trays/validate")
     def validate_tray_record(payload: dict) -> dict:
         tray = q.get_tray(_db, str(payload.get("tray_id", "")))

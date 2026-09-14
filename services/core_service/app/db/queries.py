@@ -66,6 +66,34 @@ def set_tray_validation(db: Database, tid: str, status: str) -> None:
         cur.execute('UPDATE trays SET validation = ? WHERE id = ?', (status, tid))
 
 
+_ALLOWED_TRAY_FIELDS = ("hole_id", "tray_id", "interval_from", "interval_to",
+                        "rows", "length", "width", "comments")
+
+
+def update_tray(db: Database, tid: str, fields: dict) -> dict | None:
+    """Correction (PRD §16): tulis field baru + reset validation (wajib re-validate)."""
+    from app.validation import validate_tray as _validate
+    tray = get_tray(db, tid)
+    if tray is None:
+        return None
+    merged = dict(tray)
+    for k in _ALLOWED_TRAY_FIELDS:
+        if k in fields and fields[k] is not None:
+            merged[k] = fields[k]
+    check = _validate({k: merged.get(k) for k in ("hole_id", "tray_id", "interval_from", "interval_to")})
+    if not check["valid"]:
+        raise ValueError(check["errors"].get("interval") or "; ".join(check["errors"].values()))
+    with db.transaction() as cur:
+        cur.execute(
+            '''UPDATE trays SET hole_id = ?, tray_id = ?, interval_from = ?, interval_to = ?,
+                   rows = ?, length = ?, width = ?, comments = ?, validation = NULL WHERE id = ?''',
+            (str(merged["hole_id"]), str(merged["tray_id"]), float(merged["interval_from"]),
+             float(merged["interval_to"]), int(merged.get("rows") or 0), merged.get("length"),
+             merged.get("width"), str(merged.get("comments") or ""), tid),
+        )
+    return get_tray(db, tid)
+
+
 # --- photos ---
 
 def create_photo(db: Database, tray_id: str, filename: str, raw_path: str, jpg_path: str,
@@ -77,6 +105,8 @@ def create_photo(db: Database, tray_id: str, filename: str, raw_path: str, jpg_p
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
             (pid, tray_id, filename, raw_path, jpg_path, thumb_path, md5, _now()),
         )
+        # Artefak berubah -> status validasi lama gugur, wajib re-validate.
+        cur.execute('UPDATE trays SET validation = NULL WHERE id = ?', (tray_id,))
     return get_photo(db, pid)
 
 

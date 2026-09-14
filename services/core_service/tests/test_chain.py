@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app import main as m
 from app.storage import md5_file
+from app.storage import md5_file as _md5
 
 
 @pytest.fixture()
@@ -84,8 +85,32 @@ def test_capture_process_chain(api):
     assert v["status"] == "VALID"
 
 
+def test_tray_correction_resets_validation(api):
+    s = _session(api)
+    t = _tray(api, s["id"])
+    assert api.post("/trays/validate", json={"tray_id": t["id"]}).json()["status"] == "VALID"
+    bad = api.patch(f"/trays/{t['id']}", json={"interval_from": 20.0, "interval_to": 10.0})
+    assert bad.status_code == 422
+    assert api.patch("/trays/t9", json={"comments": "x"}).status_code == 404
+    fixed = api.patch(f"/trays/{t['id']}", json={"comments": "koreksi", "interval_to": 3.0}).json()["tray"]
+    assert fixed["comments"] == "koreksi" and fixed["validation"] is None
+    assert api.get(f"/trays/{t['id']}").json()["tray"]["interval_to"] == 3.0
+    assert api.post("/trays/validate", json={"tray_id": t["id"]}).json()["status"] == "VALID"
+
+
+def test_new_photo_invalidates_tray(api):
+    s = _session(api)
+    t = _tray(api, s["id"])
+    assert api.post("/trays/validate", json={"tray_id": t["id"]}).json()["status"] == "VALID"
+    cap = api.post("/captures", json={"filename": "Core01_1_000.00_2.60.jpg", "tray_id": t["id"],
+                                      "box": [0, 0], "out_dir": api.out}).json()["job_id"]
+    raw = _job(api, cap)["result"]["raw_path"]
+    api.post("/process", json={"raw_path": raw, "tray_id": t["id"], "box": [0, 0]})
+    assert api.get(f"/trays/{t['id']}").json()["tray"]["validation"] is None
+    assert api.post("/trays/validate", json={"tray_id": t["id"]}).json()["status"] == "VALID"
+
+
 def test_retake_reuses_tray(api):
-    from app.storage import md5_file as _md5
     s = _session(api)
     t = _tray(api, s["id"])
     cap = api.post("/captures", json={"filename": "Core01_1_000.00_2.60.jpg", "tray_id": t["id"],
