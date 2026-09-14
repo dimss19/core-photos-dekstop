@@ -1,151 +1,112 @@
-# User Flow — Aplikasi Core Photo
+# User Flow — Aplikasi Core Photo (sesuai perilaku kode saat ini)
 
-Dokumen ini menjelaskan alur penggunaan aplikasi dari sudut pandang operator,
-mengikuti PRD `PRD_AI_Agent_Core_Photo_v1.0.md`. Semua capture/processing/review/
-validation/local storage berjalan **offline**; network hanya untuk Transfer.
-
----
-
-## 1. Instalasi
-
-1. Unduh `CorePhoto-Setup-vX.Y.Z.exe` (satu file installer).
-2. Double-click → Next → pilih folder (default `Program Files\Core Photo`).
-3. Installer memasang `CorePhoto.exe` (Flutter UI) + `core_service.exe`
-   (Python local service) + VC++ Redist bila belum ada. Script installer
-   di `installer/corephoto.iss` (kompilasi via `iscc`, lihat `installer/BUILD.md`).
-   Driver/SDK kamera vendor (Canon/Nikon/Sony) fase hardware; saat ini
-   service memakai adapter kamera generik.
-4. Shortcut Start Menu / Desktop dibuat. Data runtime (SQLite, log, token)
-   otomatis di `%LOCALAPPDATA%\CorePhoto\`; foto default di `Documents\CorePhoto\`
-   (bisa diubah di Settings). Tidak perlu install Python/Flutter terpisah.
-5. Update = jalankan installer versi baru (timpa exe saja; DB dan foto tidak dihapus).
-
-## 2. Buka Aplikasi & Dashboard
-
-1. Buka aplikasi dari shortcut. Jika `core_service.exe` belum jalan
-   (mis. development), jalankan manual / via SidecarLauncher sebelum membuka
-   layar yang butuh API — Dashboard menampilkan status koneksi service.
-   (Auto-start sidecar dari Flutter menyusul paket installer final.)
-2. Dashboard menampilkan:
-   - Session aktif (atau "-");
-   - Status kamera (`Connected/Ready` | `Not Connected` | `Error`);
-   - Menu: Session, Capture, Photo Browser, Validation, Transfer, Config.
-
-## 3. Session (PRD §5)
-
-1. Buka menu **Session**.
-2. **Create**: isi Date, Operator, Site → session baru otomatis jadi aktif.
-3. **Open/Continue**: pilih session dari daftar → jadikan aktif (Activate).
-4. Session aktif = konteks untuk semua capture berikutnya.
-
-## 4. Siapkan Kamera (PRD §6)
-
-1. Hubungkan kamera DSLR/Mirrorless (Canon/Nikon/Sony) via USB ke workstation.
-2. Status kamera tampil di Dashboard (`Connected/Ready` | `Not Connected` | `Error`).
-   Koneksi dilakukan via endpoint `POST /camera/connect` (otomatis saat service
-   start dengan adapter yang tersedia); kamera tak terdeteksi → status Error
-   dengan detail, dan Capture diblokir sampai kamera kembali.
-3. Lihat capability nyata di **Settings** (Live View/ISO/Focus/Zoom/Capture:
-   Ya/Tidak). ISO acuan +1200; yang unsupported tetap aman tanpa crash.
-4. Jika kamera putus di tengah workflow: Capture diblokir sampai kamera kembali.
-
-## 5. Input Data Tray (PRD §7–§8)
-
-1. Buka **Capture** → isi Tray Data:
-   Hole ID, Tray ID, Core Interval From/To, Tray Rows, Tray Length,
-   Tray Width, Comments.
-2. **Interval Validation** otomatis saat mengetik:
-   - `To < From` → warning + tombol **Take Picture disabled**.
-   - Perbaiki nilai → warning hilang.
-3. Tekan **Validate Tray** → tray tersimpan di server. Baru setelah itu
-   **Take Picture** aktif (syarat: form valid + tray tersimpan + kamera ready).
-
-## 6. Live View & Framing (PRD §9)
-
-1. Letakkan tray/core di photography station.
-2. Panel **Live View** menampilkan frame terakhir dari kamera
-   (`GET /camera/frame`) + overlay **Grid**; tekan **Refresh** untuk frame baru.
-   (Stream MJPEG kontinu tersedia di endpoint `/camera/liveview.mjpg` untuk
-   fase berikutnya.)
-3. Pastikan posisi tray, lalu lanjut ke Capture.
-
-## 7. Capture (PRD §10)
-
-1. Tekan **Take Picture** (aktif hanya jika form valid + tray tersimpan
-   via Validate Tray + kamera ready).
-2. Foto diterima dari kamera → disimpan sebagai RAW di folder tray versi
-   (`.../HoleID_LabelTray/`; otomatis `_v2`, `_v3` bila sudah ada) → dikaitkan
-   ke Session + Tray aktif.
-3. Otomatis masuk layar **Review**.
-
-## 8. Review & Retake (PRD §11)
-
-1. Lihat hasil foto + metadata Tray.
-2. Cocok → **Save** → lanjut Processing.
-3. Tidak cocok → **Retake** → kembali Capture (metadata Tray tetap,
-   hasil Retake yang dipakai).
-
-## 9. Processing Otomatis (PRD §12–§13)
-
-Setelah Save, tanpa aksi operator:
-
-1. **RAW** (file original, mis. `Core01_1_000.00_2.60.jpg`) disimpan apa adanya.
-2. **Tray Crop** 300×200 patokan sudut Box Core.
-3. **JPG** (`*_display.jpg`) + **Thumbnail** (`*_thumb.jpg`) dihasilkan dari area crop.
-4. Format filename dipertahankan (`Core01_1_000.00_2.60.jpg`; From dipad
-   `000.00` persis contoh PRD) + sidecar `{nama}.json` metadata lengkap
-   16 field PRD (Hole, Tray, Interval, Path, Comments, Date, Operator, Site,
-   MD5, Timestamp, Rows, Length, Width, Crop).
-
-## 10. Validation (PRD §16)
-
-1. Status **VALID / INVALID** (cek: interval, filename, kelengkapan data).
-2. INVALID → tampilkan masalah → **Correction** → validasi ulang.
-3. VALID → **Tray Complete**.
-4. Layar **Validation** menampilkan status + detail error/warning + aksi perbaiki.
-
-## 11. Tray Berikutnya / Selesai
-
-1. **More Tray? Yes** → kembali ke Input Data Tray (langkah 5).
-2. **No** → session selesai → ke Transfer.
-3. Aturan folder: setiap capture tersimpan di folder tray versi otomatis
-   (`_v2`, `_v3` bila label sama sudah ada) — file lama tidak pernah tertimpa.
-   Retake menimpa file capture-nya sendiri (by design: hasil Retake yang dipakai).
-   File lokal tetap ada setelah Transfer.
-
-## 12. Photo Browser (PRD §18, kapan saja)
-
-1. Buka **Photo Browser** (data lokal SQLite, offline).
-2. Search/filter by Drillhole → daftar foto + Tray info + interval + Thumbnail.
-3. Tap item → dialog preview foto ukuran penuh.
-
-## 13. Transfer ke Server (PRD §19, butuh network)
-
-1. Buka **Transfer** (terpisah dari capture).
-2. Isi folder tujuan (mendukung path lokal / share termount) → **Check Connection**.
-   - Tidak bisa ditulis → unreachable + detail (data lokal aman).
-3. Centang Session → **Start Transfer** → progress/status ditampilkan.
-4. Validasi MD5 per file → **Success** (file lokal tetap disimpan, tidak dihapus)
-   atau **Error** + daftar file gagal → **Retry**.
-
-## 14. Settings (PRD §20.8)
-
-1. Server URL + API token (ditampilkan; diedit di kode/build berikutnya).
-2. ISO acuan +1200, Focus/Manual, Zoom — plus tabel **Kemampuan kamera**
-   nyata dari adapter (Ya/Tidak per Live View/ISO/Focus/Zoom/Capture).
-3. Tentang aplikasi / versi.
-
-## 15. Error Handling Ringkas (PRD §22)
-
-| Kondisi | Tampilan |
-|---|---|
-| Kamera tidak terdeteksi / putus | Status Error + detail; Capture diblokir; hubungkan ulang + Activate session bila perlu |
-| Capture gagal / setting unsupported | Pesan jelas, tanpa crash |
-| Interval invalid / filename invalid | Warning + Capture disabled |
-| Disk penuh / permission / write gagal | Pesan + aksi (bebaskan disk / cek izin) |
-| RAW rusak / crop/JPG/thumb gagal | Pesan + ulangi processing |
-| Server unreachable / transfer gagal | Error + Retry; data lokal aman |
+Dokumen ini menjelaskan alur pakai dari apa yang benar-benar dilakukan
+aplikasi sekarang (Flutter `apps/flutter_app` + service `services/core_service`),
+bukan dari target PRD. Semua endpoint di bawah adalah localhost
+(`http://127.0.0.1:42839`).
 
 ---
 
-*Sumber: PRD v1.0 + spec `docs/superpowers/specs/2026-09-13-core-photo-tech-stack-design.md`.*
+## 1. Instalasi & menjalankan
+
+1. Build manual (belum ada `Setup.exe` jadi):
+   - Service: `python -m PyInstaller ... services/core_service/run.py`
+     → `dist\core_service.exe` (sudah terbukti jalan, jawab `/healthz`).
+   - UI: `flutter build windows --release` → `core_photo.exe`.
+   - Script installer ada (`installer/corephoto.iss`) tapi belum dikompilasi
+     (butuh Inno Setup `iscc`).
+2. Jalankan `core_service.exe` dulu (atau `uvicorn app.main:app` saat develop),
+   lalu jalankan `CorePhoto.exe`. **Aplikasi tidak auto-start service**
+   (`SidecarLauncher` ada tapi belum dipakai `main.dart`).
+3. DB SQLite dibuat otomatis di `%LOCALAPPDATA%\CorePhoto\data.db`
+   (bisa dioverride via env `COREPHOTO_DB`). Log di `corephoto.log` folder sama.
+
+## 2. Dashboard (tab Home)
+
+- Menampilkan status kamera dari `GET /camera/status`
+  (`Connected/Ready` | `Not Connected` | `Error`, atau `Unknown` bila service mati).
+- Menampilkan session aktif (`Operator @ Site`, atau `-` bila belum ada).
+- Daftar menu tap: Session, Capture, Photo Browser, Validation, Transfer, Settings.
+- Tidak ada tombol Connect/Disconnect kamera di UI mana pun.
+
+## 3. Session (tab Session)
+
+- Form Date (default `2026-09-13`), Operator, Site + tombol **Create**.
+- Operator kosong → error merah `Operator wajib diisi`, tidak ada request terkirim.
+- Create → `POST /sessions` → session langsung jadi aktif + masuk daftar.
+- Tiap baris daftar ada tombol **Activate** → session itu jadi aktif
+  (dipakai layar Capture sebagai konteks).
+- Data tersimpan di SQLite, survive restart service. Lanjutkan session lama
+  dengan Activate ulang setelah restart (active-nya sendiri tidak persist).
+
+## 4. Capture (tab Capture)
+
+- Form 8 field: Hole ID, Tray ID, From, To, Rows, Length, Width, Comments.
+- Warning merah live saat mengetik: ID kosong, interval bukan angka,
+  atau `To < From`.
+- Tombol **Validate Tray** → `POST /trays` (ditolak 422 bila interval invalid,
+  404 bila session tak dikenal). Berhasil → tray tersimpan (`t1`, `t2`, …).
+- Panel Live View: satu frame terakhir dari `GET /camera/frame` + overlay Grid
+  + tombol **Refresh** (tidak ada video/MJPEG stream di UI, tidak ada kontrol Zoom).
+- Tombol **Take Picture**: disabled sampai form valid **dan** Validate Tray sukses.
+  Ditekan → `POST /captures` (nama file `Hole_Tray_From_To.jpg`, box selalu
+  `[0, 0]`, folder output selalu relatif `captures/`) → polling job →
+  otomatis pindah ke tab Review.
+- File RAW disimpan di subfolder tray berversi otomatis
+  (`.../HoleID_Label/`, `_v2` bila sudah ada). Tray tak dikenal → job error.
+
+## 5. Review (tab Review)
+
+- Kosong → teks `Belum ada hasil capture`, kedua tombol disabled.
+- Ada hasil → kotak hitam menampilkan **teks path file** (bukan gambar),
+  plus ID tray.
+- **Save** → `POST /process`: crop 300×200 → `*_display.jpg` + `*_thumb.jpg` +
+  sidecar `{nama}.json` + baris photo di DB; tampil path JPG-nya.
+- **Retake** → `POST /captures/{job}/retake` (tray_id yang sama dipakai ulang):
+  file RAW milik capture itu **ditimpa** (by design), lalu kembali ke Capture.
+
+## 6. Photo Browser (tab Browser)
+
+- Load `GET /photos` saat dibuka; kolom **Search** filter lokal by nama file
+  atau Hole ID; kosong → `No photos`.
+- Tiap baris: thumbnail (`.../file?variant=thumb`, ikon bila gagal load),
+  nama file, `Hole · From–To`.
+- Tap baris → dialog preview JPG penuh + tombol Tutup.
+
+## 7. Validation (tab Valid)
+
+- Isi Tray ID (mis. `t1`) → **Validate** → `POST /trays/validate`.
+- Tampil status hijau `VALID` atau merah `INVALID` + daftar `field: masalah`
+  (interval, filename, kelengkapan data). Status tersimpan di tray.
+- Tidak ada aksi perbaiki otomatis — betulkan via Capture (tray/form baru)
+  lalu Validate ulang.
+
+## 8. Transfer (tab Transfer)
+
+- Daftar session dengan checkbox + kolom folder tujuan + tombol
+  **Check Connection** → `reachable` / `unreachable: alasan`.
+- Pilih ≥1 session (kosong → `Pilih minimal 1 session`) → **Start Transfer**.
+- Progress bar + status: `Success: [...]` atau `Error: ...`.
+- Yang disalin per foto: RAW + JPG + thumb + sidecar JSON, dicek MD5 per file;
+  gagal → job error berisi daftar file. File lokal **tidak dihapus**.
+- **Retry** aktif setelah ada job → menjalankan ulang transfer yang sama
+  (job baru). Tujuan yang didukung: `{"type":"folder","path":...}`
+  (termasuk share termount); tipe lain → unreachable.
+
+## 9. Settings (tab Config)
+
+- Menampilkan base URL + status token (*** bila diisi, read-only).
+- Label statis: ISO +1200, Focus Manual, Zoom 1.0x (display saja,
+  bukan kontrol — kontrol ISO/Focus/Zoom hanya via API `/camera/settings`).
+- Tabel **Kemampuan kamera** live dari `/camera/capabilities`
+  (Ya/Tidak per Live View/ISO/Focus/Zoom/Capture).
+
+## 10. Batasan yang masih berlaku
+
+- Kamera nyata (Canon/Nikon/Sony) belum didukung — yang jalan `FakeAdapter`;
+  tambah adapter = implementasi `ICameraAdapter` + daftarkan ke `CameraManager`.
+- Box crop selalu `[0, 0]` (framing interaktif belum ada); folder output capture
+  selalu relatif `captures/` (bukan Documents).
+- Tidak ada login/user — siapa pun yang membuka aplikasi memakai data yang sama.
+- Transfer sinkron di request (aman untuk file kecil/fake; RAW besar butuh
+  worker thread — kontrak job tak berubah).
