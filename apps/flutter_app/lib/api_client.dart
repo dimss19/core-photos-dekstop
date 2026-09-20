@@ -38,8 +38,12 @@ class ApiClient {
   Future<Map<String, dynamic>> jobStatus(String id) => getJson('/jobs/$id');
   Future<Map<String, dynamic>> cameraStatus() => getJson('/camera/status');
   Future<Map<String, dynamic>> cameraCapabilities() => getJson('/camera/capabilities');
-  Future<Map<String, dynamic>> capture({required String filename, required List<double> box, required String outDir}) =>
-      postJson('/captures', {'filename': filename, 'box': box, 'out_dir': outDir});
+  Future<Map<String, dynamic>> cameraConnect() => postJson('/camera/connect', {});
+  Future<Map<String, dynamic>> cameraDisconnect() => postJson('/camera/disconnect', {});
+  Future<Map<String, dynamic>> cameraLiveViewStart() => postJson('/camera/liveview/start', {});
+  Future<Map<String, dynamic>> cameraLiveViewStop() => postJson('/camera/liveview/stop', {});
+  Future<Map<String, dynamic>> capture({required String filename, required List<num> box, required String outDir, String? trayId}) =>
+      postJson('/captures', {'filename': filename, 'box': box, 'out_dir': outDir, if (trayId != null) 'tray_id': trayId});
   Future<Map<String, dynamic>> createSession({required String date, required String operator, required String site}) =>
       postJson('/sessions', {'date': date, 'operator': operator, 'site': site});
   Future<Map<String, dynamic>> listSessions() => getJson('/sessions');
@@ -49,7 +53,7 @@ class ApiClient {
   Future<Map<String, dynamic>> getTray(String id) => getJson('/trays/$id');
   Future<Map<String, dynamic>> correctTray(String id, Map<String, dynamic> fields) => patchJson('/trays/$id', fields);
   Future<Map<String, dynamic>> validateTray(String trayId) => postJson('/trays/validate', {'tray_id': trayId});
-  Future<Map<String, dynamic>> processCapture({required String rawPath, required String trayId, List<int> box = const [0, 0]}) =>
+  Future<Map<String, dynamic>> processCapture({required String rawPath, required String trayId, List<num> box = const [0.0, 0.0]}) =>
       postJson('/process', {'raw_path': rawPath, 'tray_id': trayId, 'box': box});
   Future<Map<String, dynamic>> retakeCapture(String jobId, Map<String, dynamic> payload) =>
       postJson('/captures/$jobId/retake', payload);

@@ -21,6 +21,7 @@ class _SessionScreenState extends State<SessionScreen> {
   final _site = TextEditingController();
   String? _error;
   List<SessionInfo> _sessions = [];
+  String? _activeId;
 
   @override
   void initState() {
@@ -39,7 +40,18 @@ class _SessionScreenState extends State<SessionScreen> {
   Future<void> _refresh() async {
     try {
       final sessions = await SessionService(widget.api).list();
-      if (mounted) setState(() => _sessions = sessions);
+      String? activeId;
+      try {
+        final act = await widget.api.activeSession();
+        activeId = act['active']?['id']?.toString();
+        if (activeId != null) widget.onActive?.call(activeId);
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _sessions = sessions;
+          _activeId = activeId;
+        });
+      }
     } catch (_) {}
   }
 
@@ -82,9 +94,23 @@ class _SessionScreenState extends State<SessionScreen> {
           ElevatedButton(onPressed: _create, child: const Text('Create')),
           for (final session in _sessions)
             ListTile(
-              title: Text('${session.operator} @ ${session.site}'),
+              title: Row(
+                children: [
+                  Text('${session.operator} @ ${session.site}'),
+                  if (session.id == _activeId) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(4)),
+                      child: const Text('ACTIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ],
+              ),
               subtitle: Text('${session.date} · ${session.id}'),
-              trailing: TextButton(onPressed: () => _activate(session.id), child: const Text('Activate')),
+              trailing: session.id == _activeId
+                  ? const Icon(Icons.check_circle, color: Colors.green)
+                  : TextButton(onPressed: () => _activate(session.id), child: const Text('Activate')),
             ),
         ],
       ),

@@ -200,11 +200,35 @@ def create_app() -> FastAPI:
                 return {"job_id": job["id"]}
             os.makedirs(out_dir, exist_ok=True)
             raw_path = os.path.join(out_dir, str(payload["filename"]))
+            stem, ext = os.path.splitext(str(payload["filename"]))
+            if os.path.exists(raw_path) or os.path.exists(os.path.join(out_dir, stem + "_raw" + ext)):
+                i = 2
+                while True:
+                    cand_dir = f"{out_dir}_v{i}"
+                    cand_path = os.path.join(cand_dir, str(payload["filename"]))
+                    if not os.path.exists(cand_dir) and not os.path.exists(cand_path):
+                        out_dir = cand_dir
+                        os.makedirs(out_dir, exist_ok=True)
+                        raw_path = cand_path
+                        break
+                    i += 1
             adapter.capture(raw_path)
-            if payload.get("tray_id"):
-                _capture_ctx[job["id"]] = {"tray_id": str(payload["tray_id"]), "box": payload.get("box", [0, 0])}
+            _capture_ctx[job["id"]] = {
+                "tray_id": str(payload.get("tray_id", "")),
+                "box": payload.get("box", [0, 0]),
+                "out_dir": str(payload.get("out_dir", "captures")),
+                "filename": str(payload["filename"]),
+                "target_dir": out_dir,
+            }
             logger.info("capture done: %s", raw_path)
-            finish_job(job["id"], {"raw_path": raw_path, "md5": md5_file(raw_path), "filename": str(payload["filename"])})
+            finish_job(job["id"], {
+                "raw_path": raw_path,
+                "md5": md5_file(raw_path),
+                "filename": str(payload["filename"]),
+                "tray_id": str(payload.get("tray_id", "")),
+                "out_dir": str(payload.get("out_dir", "captures")),
+                "target_dir": out_dir,
+            })
         except (CameraError, OSError) as e:
             logger.warning("capture failed: %s", e)
             fail_job(job["id"], str(e))
@@ -213,7 +237,9 @@ def create_app() -> FastAPI:
     @app.post("/captures/{jid}/retake")
     def captures_retake(jid: str, payload: dict) -> dict:
         prev = _capture_ctx.get(jid, {})
-        tray_id = str(payload.get("tray_id", prev.get("tray_id", "")))
+        prev_job = get_job(jid) or {}
+        prev_result = prev_job.get("result") or {}
+        tray_id = str(payload.get("tray_id", prev.get("tray_id", prev_result.get("tray_id", ""))))
         box = payload.get("box", prev.get("box", [0, 0]))
         job = create_job("capture")
         try:
@@ -222,21 +248,46 @@ def create_app() -> FastAPI:
             fail_job(job["id"], str(e))
             return {"job_id": job["id"]}
         try:
-            out_dir, _, tray_err = _capture_target(str(payload.get("out_dir", "")), tray_id)
-            if tray_err:
-                fail_job(job["id"], tray_err)
-                return {"job_id": job["id"]}
+            base_out_dir = str(payload.get("out_dir") or prev.get("out_dir") or prev_result.get("out_dir") or "")
+            if base_out_dir and tray_id:
+                out_dir, _, tray_err = _capture_target(base_out_dir, tray_id)
+                if tray_err:
+                    fail_job(job["id"], tray_err)
+                    return {"job_id": job["id"]}
+            else:
+                out_dir = str(prev.get("target_dir") or prev_result.get("target_dir") or "")
+                if not out_dir and prev_result.get("raw_path"):
+                    out_dir = os.path.dirname(prev_result["raw_path"])
+                if tray_id and not out_dir:
+                    out_dir, _, tray_err = _capture_target("captures", tray_id)
+                    if tray_err:
+                        fail_job(job["id"], tray_err)
+                        return {"job_id": job["id"]}
             filename = str(payload.get("filename", ""))
+            if not filename and prev_result.get("filename"):
+                filename = str(prev_result["filename"])
             if not filename:
                 fail_job(job["id"], "filename required for retake")
                 return {"job_id": job["id"]}
             os.makedirs(out_dir, exist_ok=True)
             raw_path = os.path.join(out_dir, filename)
+            stem, ext = os.path.splitext(filename)
+            if os.path.exists(raw_path) or os.path.exists(os.path.join(out_dir, stem + "_raw" + ext)):
+                i = 2
+                while True:
+                    cand_dir = f"{out_dir}_v{i}"
+                    cand_path = os.path.join(cand_dir, filename)
+                    if not os.path.exists(cand_dir) and not os.path.exists(cand_path):
+                        out_dir = cand_dir
+                        os.makedirs(out_dir, exist_ok=True)
+                        raw_path = cand_path
+                        break
+                    i += 1
             adapter.capture(raw_path)
             if tray_id:
                 _capture_ctx[job["id"]] = {"tray_id": tray_id, "box": box}
             logger.info("retake done: %s", raw_path)
-            finish_job(job["id"], {"raw_path": raw_path, "md5": md5_file(raw_path), "filename": filename})
+            finish_job(job["id"], {"raw_path": raw_path, "md5": md5_file(raw_path), "filename": filename, "tray_id": tray_id})
         except (CameraError, OSError) as e:
             logger.warning("retake failed: %s", e)
             fail_job(job["id"], str(e))
@@ -325,9 +376,13 @@ def create_app() -> FastAPI:
             stem, ext = os.path.splitext(raw_path)
             # PRD §14: filename final kanonis milik JPG deliverable;
             # RAW digeser ke {stem}_raw (isi tak berubah), bukan sebaliknya.
-            raw_kept = stem + "_raw" + ext
-            os.replace(raw_path, raw_kept)
-            raw_path = raw_kept
+            if raw_path.endswith("_raw" + ext):
+                raw_kept = raw_path
+                stem = stem[:-4]
+            else:
+                raw_kept = stem + "_raw" + ext
+                os.replace(raw_path, raw_kept)
+                raw_path = raw_kept
             jpg_path, thumb_path, sidecar_path = stem + ext, stem + "_thumb.jpg", stem + ".json"
             crop = crop_tray(raw_path, jpg_path, thumb_path, box)
             md5 = md5_file(raw_path)

@@ -27,8 +27,20 @@ class DashboardScreen extends StatelessWidget {
               return Text('Session: $label');
             },
           ),
-          for (final entry in const {'Session': 1, 'Capture': 2, 'Photo Browser': 3, 'Validation': 4, 'Transfer': 5, 'Settings': 6}.entries)
-            ListTile(title: Text(entry.key), onTap: () => onOpen(entry.value)),
+          for (final entry in const {
+            'Session': 1,
+            'Capture': 2,
+            'Review': 3,
+            'Photo Browser': 4,
+            'Validation': 5,
+            'Transfer': 6,
+            'Settings': 7,
+          }.entries)
+            ListTile(
+              title: Text(entry.key),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => onOpen(entry.value),
+            ),
         ],
       ),
     );

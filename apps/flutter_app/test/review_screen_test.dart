@@ -14,7 +14,7 @@ MockClient _stub() => MockClient((req) async {
       if (p == '/process') {
         out = {'job_id': 'job-9'};
       } else if (p == '/jobs/job-9') {
-        out = {'status': 'done', 'result': {'jpg_path': '/tmp/x_display.jpg'}};
+        out = {'status': 'done', 'result': {'jpg_path': '/tmp/x.jpg'}};
       } else if (p == '/captures/job-1/retake') {
         out = {'job_id': 'job-2'};
       } else if (p == '/jobs/job-2') {
@@ -50,7 +50,26 @@ void main() {
     expect(tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Save')).enabled, isFalse);
   });
 
-  testWidgets('save processes and retake re-captures', (tester) async {
+  testWidgets('save processes and retake re-captures with double box coordinates', (tester) async {
+    var processed = false;
+    await tester.pumpWidget(MaterialApp(
+      home: ReviewScreen(
+        api: ApiClient(baseUrl: 'http://127.0.0.1:9', httpClient: _stub()),
+        workflow: _reviewing(),
+        capture: const {'job_id': 'job-1', 'raw_path': '/tmp/r.jpg', 'tray_id': 't1', 'box': [0.25, 0.75]},
+        onProcessed: (_) => processed = true,
+      ),
+    ));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(processed, isTrue);
+    expect(find.textContaining('TypeError'), findsNothing);
+    await tester.tap(find.text('Retake'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Retake done'), findsOneWidget);
+  });
+
+  testWidgets('save processes and retake re-captures with int box coordinates', (tester) async {
     var processed = false;
     await tester.pumpWidget(MaterialApp(
       home: ReviewScreen(

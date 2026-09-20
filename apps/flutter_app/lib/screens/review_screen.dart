@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:core_photo/api_client.dart';
 import 'package:core_photo/workflow.dart';
@@ -39,10 +40,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _status = 'Processing...';
     });
     try {
+      final rawBox = cap['box'];
+      final box = (rawBox is List)
+          ? rawBox.map((e) => (e as num).toDouble()).toList()
+          : const <double>[0.0, 0.0];
       final res = await widget.api.processCapture(
         rawPath: cap['raw_path'].toString(),
         trayId: cap['tray_id'].toString(),
-        box: List<int>.from(cap['box'] as List),
+        box: box,
       );
       final job = await _pollJob(res['job_id'].toString());
       if (job['status'] != 'done') throw Exception(job['error'] ?? 'processing gagal');
@@ -65,9 +70,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _status = 'Retaking...';
     });
     try {
+      final rawBox = cap['box'];
+      final box = (rawBox is List)
+          ? rawBox.map((e) => (e as num).toDouble()).toList()
+          : const <double>[0.0, 0.0];
       final res = await widget.api.retakeCapture(cap['job_id'].toString(), {
         'tray_id': cap['tray_id'],
-        'box': cap['box'],
+        'box': box,
         'out_dir': 'captures',
         'filename': (cap['raw_path'] as String).split(RegExp(r'[/\\]')).last,
       });
@@ -92,12 +101,38 @@ class _ReviewScreenState extends State<ReviewScreen> {
         children: [
           Container(
             key: const Key('preview'),
-            height: 200,
+            height: 240,
             color: Colors.black,
             child: Center(
               child: cap == null
                   ? const Text('Belum ada hasil capture', style: TextStyle(color: Colors.white))
-                  : Text(cap['raw_path'].toString(), style: const TextStyle(color: Colors.white)),
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.file(
+                          File(cap['raw_path'].toString()),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => Center(
+                            child: Text(cap['raw_path'].toString(), style: const TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                        Positioned(
+                          left: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              (cap['raw_path'] as String).split(RegExp(r'[/\\]')).last,
+                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
           const SizedBox(height: 8),

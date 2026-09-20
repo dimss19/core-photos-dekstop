@@ -13,19 +13,44 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   Map<String, dynamic>? _caps;
+  String _cameraStatus = 'Memeriksa...';
 
   @override
   void initState() {
     super.initState();
-    widget.api.cameraCapabilities().then((c) {
-      if (mounted) setState(() => _caps = c);
-    }).catchError((_) {});
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final st = await widget.api.cameraStatus();
+      final c = await widget.api.cameraCapabilities();
+      if (mounted) {
+        setState(() {
+          _cameraStatus = st['status']?.toString() ?? 'Unknown';
+          _caps = c;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _cameraStatus = 'Not Connected');
+    }
+  }
+
+  Future<void> _connect() async {
+    try {
+      await widget.api.cameraConnect();
+      await _refresh();
+    } catch (_) {}
   }
 
   String _mark(bool? v) => v == true ? 'Ya' : 'Tidak';
 
   @override
   Widget build(BuildContext context) {
+    final supportsIso = _caps?['supports_iso'] == true;
+    final supportsFocus = _caps?['supports_focus'] == true;
+    final supportsZoom = _caps?['supports_zoom'] == true;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(children: [
@@ -34,9 +59,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(children: [
             ListTile(title: const Text('Server URL'), trailing: Text(widget.api.baseUrl)),
             ListTile(title: const Text('API Token'), trailing: Text(widget.api.token?.isNotEmpty == true ? '***' : '')),
-            ListTile(title: const Text('Camera ISO'), trailing: const Text('+1200')),
-            ListTile(title: const Text('Camera Focus'), trailing: const Text('Manual')),
-            ListTile(title: const Text('Camera Zoom'), trailing: const Text('1.0x')),
+            ListTile(
+              title: const Text('Status Kamera'),
+              subtitle: Text('Adapter: ${_caps?['adapter'] ?? 'None'}'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_cameraStatus),
+                  const SizedBox(width: 8),
+                  TextButton(onPressed: _connect, child: const Text('Connect')),
+                ],
+              ),
+            ),
+            const Divider(),
+            const ListTile(title: Text('Kontrol Kamera')),
+            ListTile(
+              title: const Text('Camera ISO'),
+              trailing: Text(supportsIso ? '+1200' : 'Tidak didukung'),
+            ),
+            ListTile(
+              title: const Text('Camera Focus'),
+              trailing: Text(supportsFocus ? 'Manual' : 'Tidak didukung'),
+            ),
+            ListTile(
+              title: const Text('Camera Zoom'),
+              trailing: Text(supportsZoom ? '1.0x' : 'Tidak didukung'),
+            ),
             const Divider(),
             const ListTile(title: Text('Kemampuan kamera')),
             ListTile(title: const Text('Live View'), trailing: Text(_mark(_caps?['supports_liveview'] as bool?))),

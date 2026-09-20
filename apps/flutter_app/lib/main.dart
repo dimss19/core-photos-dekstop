@@ -33,6 +33,24 @@ class _CorePhotoAppState extends State<CorePhotoApp> {
   Map<String, dynamic>? _lastCapture;
 
   @override
+  void initState() {
+    super.initState();
+    _recoverActiveSession();
+  }
+
+  Future<void> _recoverActiveSession() async {
+    try {
+      final res = await _api.activeSession();
+      final act = res['active'];
+      if (act != null && mounted) {
+        setState(() {
+          _sessionId = act['id']?.toString() ?? '';
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
     final pages = [
       DashboardScreen(api: _api, onOpen: (index) => setState(() => _index = index)),

@@ -31,12 +31,37 @@ class _CaptureScreenState extends State<CaptureScreen> {
   int _frameBuster = 0;
   double _fx = 0.0;
   double _fy = 0.0;
+  String _cameraStatus = 'Connecting...';
 
   TextEditingController _c(String key, [String initial = '']) =>
       _controllers.putIfAbsent(key, () => TextEditingController(text: initial));
 
   @override
+  void initState() {
+    super.initState();
+    _connectCamera();
+  }
+
+  Future<void> _connectCamera() async {
+    try {
+      final res = await widget.api.cameraConnect();
+      await widget.api.cameraLiveViewStart();
+      if (mounted) {
+        setState(() {
+          _cameraStatus = res['status']?.toString() ?? 'Connected/Ready';
+          _frameBuster++;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _cameraStatus = 'Not Connected');
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    widget.api.cameraLiveViewStop().catchError((_) => {});
     for (final c in _controllers.values) {
       c.dispose();
     }
@@ -93,7 +118,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     });
     try {
       widget.workflow.toCapturing();
-      final cap = await widget.api.capture(filename: _form.filename(), box: [_fx, _fy], outDir: 'captures');
+      final cap = await widget.api.capture(filename: _form.filename(), box: [_fx, _fy], outDir: 'captures', trayId: _trayId);
       final job = await _pollJob((cap['job_id'] ?? cap['jobId'] ?? '').toString());
       if (job['status'] != 'done') throw Exception(job['error'] ?? 'capture gagal');
       widget.workflow.toReviewing();
@@ -116,7 +141,43 @@ class _CaptureScreenState extends State<CaptureScreen> {
     final warning = _warning ?? _form.warning;
     final canCapture = _form.canCapture && _trayId != null && !_busy;
     return Scaffold(
-      appBar: AppBar(title: const Text('Capture')),
+      appBar: AppBar(
+        title: const Text('Capture'),
+        actions: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _cameraStatus == 'Connected/Ready' ? Icons.videocam : Icons.videocam_off,
+                    size: 18,
+                    color: _cameraStatus == 'Connected/Ready' ? Colors.greenAccent : Colors.amberAccent,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _cameraStatus,
+                    key: const Key('camera_status_label'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _cameraStatus == 'Connected/Ready' ? Colors.greenAccent : Colors.amberAccent,
+                    ),
+                  ),
+                  if (_cameraStatus != 'Connected/Ready') ...[
+                    const SizedBox(width: 8),
+                    TextButton(
+                      key: const Key('connect_camera_btn'),
+                      onPressed: _busy ? null : _connectCamera,
+                      child: const Text('Connect', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       // Column, bukan ListView: semua field harus ada di tree (validasi live + testing).
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -164,7 +225,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                       right: 8,
                       bottom: 8,
                       child: TextButton(
-                        onPressed: () => setState(() => _frameBuster++),
+                        onPressed: _connectCamera,
                         child: const Text('Refresh', style: TextStyle(color: Colors.white)),
                       ),
                     ),

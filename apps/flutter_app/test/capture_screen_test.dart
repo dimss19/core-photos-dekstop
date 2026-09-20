@@ -69,4 +69,27 @@ void main() {
     expect(got?['raw_path'], '/tmp/r.jpg');
     expect((got?['box'] as List).map((e) => (e as num).toDouble()).toList(), [0.5, 0.5]);
   });
+
+  testWidgets('camera status displays and connects', (tester) async {
+    final calls = <String>[];
+    final client = MockClient((req) async {
+      calls.add('${req.method} ${req.url.path}');
+      if (req.url.path == '/camera/connect') {
+        return http.Response(jsonEncode({'status': 'Connected/Ready'}), 200, headers: {'content-type': 'application/json'});
+      }
+      return http.Response(jsonEncode({'ok': true}), 200, headers: {'content-type': 'application/json'});
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: CaptureScreen(
+        api: ApiClient(baseUrl: 'http://127.0.0.1:9', httpClient: client),
+        workflow: WorkflowState(),
+        sessionId: 's1',
+        onCaptured: (_) {},
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('camera_status_label')), findsOneWidget);
+    expect(calls, contains('POST /camera/connect'));
+    expect(calls, contains('POST /camera/liveview/start'));
+  });
 }
